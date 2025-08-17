@@ -14,8 +14,12 @@ export const API_CONFIG = {
 
 // Environment'a göre API URL'ini belirle
 const getApiConfig = () => {
+  // Debug için console.log
+  console.log('VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
+  
   // Vercel deployment'da production, local'de development
   const env = import.meta.env.VITE_API_BASE_URL?.includes('localhost') ? 'development' : 'production';
+  console.log('Selected env:', env);
   return API_CONFIG[env as keyof typeof API_CONFIG] || API_CONFIG.development;
 };
 
