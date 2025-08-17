@@ -24,18 +24,10 @@ import WhatWeDoPage from "./pages/whatWeDo";
 import ContactPage from "./pages/contact";
 import NewsList from "./pages/news/index";
 import NewsForm from "./components/news/NewsForm";
-import axiosInstance, { setCsrfToken } from "./utils/axiosInstance";
+import { apiClient } from "./utils/api";
 
 export default function App() {
-  useEffect(() => {
-    axiosInstance.get<{ csrfToken: string }>("/api/csrf-token", { withCredentials: true })
-      .then(res => {
-        setCsrfToken(res.data.csrfToken); // utils/axiosInstance içinde bu fonksiyon token'ı ayarlıyor
-      })
-      .catch(err => {
-        console.error("CSRF token alınırken hata:", err);
-      });
-  }, []);
+  // CSRF token artık gerekli değil - Next.js API routes kullanıyoruz
 
   return (
     <Router>
