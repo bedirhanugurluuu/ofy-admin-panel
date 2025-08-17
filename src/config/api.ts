@@ -7,7 +7,7 @@ export const API_CONFIG = {
   },
   // Production
   production: {
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'https://your-vercel-domain.vercel.app',
+    baseURL: import.meta.env.VITE_API_BASE_URL || 'https://ofy-portfolio-h97t.vercel.app',
     apiPath: '/api'
   }
 };
