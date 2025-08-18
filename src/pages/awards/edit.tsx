@@ -58,7 +58,7 @@ export default function AwardsEditPage() {
     try {
       setFetching(true);
              const response = await api.getAward(parseInt(id!));
-      const award = response.data;
+      const award = response.data as Award;
       setFormData({
         title: award.title,
         subtitle: award.subtitle,

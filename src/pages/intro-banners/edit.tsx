@@ -38,9 +38,9 @@ export default function EditIntroBannerPage() {
     if (!id) return;
 
     setIsLoading(true);
-    axiosInstance.get<Banner>(`/api/intro-banners/${id}`)
+    api.getIntroBanner(parseInt(id!))
       .then(res => {
-        setBanner(res.data);
+        setBanner(res.data as Banner);
         setIsLoading(false);
       })
       .catch(err => {
@@ -102,11 +102,7 @@ export default function EditIntroBannerPage() {
     formData.append("button_text", banner.button_text || "");
     formData.append("button_link", banner.button_link || "");
 
-    axiosInstance.put(`/api/intro-banners/${id}`, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    })
+    api.updateIntroBanner(parseInt(id!), formData)
     .then(() => {
       Swal.fire({
         icon: "success",

@@ -32,8 +32,8 @@ export default function NewsList() {
   const fetchNews = async () => {
     try {
       setLoading(true);
-      const response = await axiosInstance.get<News[]>('/api/news');
-      setNews(response.data);
+      const response = await api.getNews();
+      setNews(response.data as News[]);
     } catch (err) {
       setError('News yüklenirken hata oluştu');
       console.error('Error fetching news:', err);
@@ -48,7 +48,7 @@ export default function NewsList() {
     }
 
     try {
-      await axiosInstance.delete(`/api/news/${id}`);
+      await api.deleteNews(id);
       setNews(news.filter(item => item.id !== id));
     } catch (err) {
       alert('Haber silinirken hata oluştu');
@@ -61,7 +61,7 @@ export default function NewsList() {
       const newsItem = news.find(item => item.id === id);
       if (!newsItem) return;
 
-      await axiosInstance.put(`/api/news/${id}`, {
+      await api.updateNews(id, {
         ...newsItem,
         is_featured: !currentFeatured
       });
