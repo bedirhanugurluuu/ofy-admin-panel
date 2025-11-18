@@ -15,6 +15,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
     "axios": "^1.11.0",
     "bootstrap": "^5.3.7",
     "daisyui": "^5.0.50",
@@ -39,5 +40,8 @@
   "overrides": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.9.5"
   }
 }

@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useBreadcrumb } from "../contexts/BreadcrumbContext";
-import { LogOut, Home, Image, Folder, User, FileText, Award, Sliders, ChevronDown } from "lucide-react";
+import { LogOut, Home, Image, Folder, User, FileText, Award, Sliders, ChevronDown, Settings } from "lucide-react";
 import Swal from "sweetalert2";
 import Breadcrumb from "../components/common/Breadcrumb";
 import LoadingSpinner from "../components/common/LoadingSpinner";
@@ -33,9 +33,10 @@ export default function MainLayout() {
   const menuItems = [
     { name: "Ana Sayfa", path: "/admin/dashboard", icon: <Home size={18} /> },
     { name: "Giriş Bannerları", path: "/admin/intro-banners", icon: <Image size={18} /> },
-                { name: "Projeler", path: "/admin/projects", icon: <Folder size={18} /> },
-            { name: "Haberler", path: "/admin/news", icon: <FileText size={18} /> },
-            { name: "Contact", path: "/admin/contact", icon: <FileText size={18} /> },
+    { name: "Projeler", path: "/admin/projects", icon: <Folder size={18} /> },
+    { name: "Haberler", path: "/admin/news", icon: <FileText size={18} /> },
+    { name: "Contact", path: "/admin/contact", icon: <FileText size={18} /> },
+    { name: "Header Ayarları", path: "/admin/header", icon: <Settings size={18} /> },
   ];
 
   const aboutSubmenuItems = [

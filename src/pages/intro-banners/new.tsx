@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import BannerForm from "../../components/intro-banners/BannerForm";
-import { api } from '../../utils/api';  // axiosInstance yolunu kendine göre ayarla
+import { api } from '../../utils/api';
+import { storageUtils } from "../../utils/supabaseStorage";
 import Swal from "sweetalert2";
 import { useBreadcrumb } from "../../contexts/BreadcrumbContext";
 
@@ -16,7 +17,7 @@ interface Banner {
 
 interface IntroBanner {
   id: number;
-  image: string;           // Mevcut görsel URL'si
+  image: string;
   title_line1: string;
   title_line2: string;
   button_text: string;
@@ -36,10 +37,10 @@ export default function NewIntroBannerPage() {
 
   const navigate = useNavigate();
   const [banners, setBanners] = useState<IntroBanner[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const { setBreadcrumbs } = useBreadcrumb();
 
   useEffect(() => {
-    // Breadcrumb'ı ayarla
     setBreadcrumbs([
       { name: "Dashboard", to: "/admin/dashboard" },
       { name: "Intro Banners", to: "/admin/intro-banners" },
@@ -48,20 +49,26 @@ export default function NewIntroBannerPage() {
   }, [setBreadcrumbs]);
 
   function findFirstEmptyIndex(banners: IntroBanner[]): number {
-    const max = 3; // Maks banner sayısı
+    const max = 3;
     const usedIndexes = banners.map(b => b.order_index);
     for (let i = 1; i <= max; i++) {
       if (!usedIndexes.includes(i)) return i;
     }
-    return max + 1; // Tüm indexler doluysa (teorik olarak olmamalı)
+    return max + 1;
   }
 
   useEffect(() => {
-    axiosInstance.get<IntroBanner[]>("/api/intro-banners")
-    .then(res => {
-      setBanners(res.data);
-    })
-    .catch(() => setBanners([]));
+    const loadBanners = async () => {
+      try {
+        const { data, error } = await api.introBanners.getAll();
+        if (error) throw error;
+        setBanners(data || []);
+      } catch (err) {
+        console.error("Banner yükleme hatası:", err);
+        setBanners([]);
+      }
+    };
+    loadBanners();
   }, []);
 
   useEffect(() => {
@@ -83,7 +90,7 @@ export default function NewIntroBannerPage() {
     }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!banner.imageFile) {
       Swal.fire({
         icon: "warning",
@@ -108,23 +115,31 @@ export default function NewIntroBannerPage() {
       }
     }
 
-    const formData = new FormData();
-    formData.append("image", banner.imageFile);
-    formData.append("order_index", String(banner.order_index));
+    setIsLoading(true);
 
-    if (banner.order_index === 3) {
-      formData.append("title_line1", banner.title_line1);
-      formData.append("title_line2", banner.title_line2);
-      formData.append("button_text", banner.button_text);
-      formData.append("button_link", banner.button_link);
-    }
+    try {
+      // Resmi Supabase Storage'a yükle
+      const timestamp = Date.now();
+      const fileName = `introbanner-${timestamp}-${Math.random().toString(36).substring(2)}.${banner.imageFile!.name.split('.').pop()}`;
+      const { data: uploadData, error: uploadError } = await storageUtils.uploadFile(banner.imageFile!, fileName);
+      if (uploadError) throw uploadError;
 
-    axiosInstance.post("/api/intro-banners", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    })
-    .then(() => {
+      const imagePath = `/uploads/${fileName}`;
+
+      // Banner verilerini hazırla
+      const bannerData = {
+        image: imagePath,
+        order_index: banner.order_index,
+        title_line1: banner.title_line1 || "",
+        title_line2: banner.title_line2 || "",
+        button_text: banner.button_text || "",
+        button_link: banner.button_link || ""
+      };
+
+      // Veritabanına kaydet
+      const { error: createError } = await api.introBanners.create(bannerData);
+      if (createError) throw createError;
+
       Swal.fire({
         icon: "success",
         title: "Başarılı",
@@ -132,15 +147,18 @@ export default function NewIntroBannerPage() {
         timer: 2000,
         showConfirmButton: false,
       });
+
       navigate("/admin/intro-banners");
-    })
-    .catch(err =>
+    } catch (err: any) {
+      console.error("Banner ekleme hatası:", err);
       Swal.fire({
         icon: "error",
         title: "Hata",
-        text: err.message,
-      })
-    );
+        text: err.message || "Banner eklenirken hata oluştu",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -151,8 +169,8 @@ export default function NewIntroBannerPage() {
         onChange={handleChange}
         onFileChange={handleFileChange}
         onSubmit={handleSubmit}
-        submitText="Ekle"
-        showFullFields={banner.order_index === 3}
+        isLoading={isLoading}
+        mode="new"
       />
     </div>
   );

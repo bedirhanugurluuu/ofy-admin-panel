@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import BannerList from "../../components/intro-banners/BannerList";
 import { api } from "../../utils/api";
+import { storageUtils } from "../../utils/supabaseStorage";
 import { useBreadcrumb } from "../../contexts/BreadcrumbContext";
 import Swal from "sweetalert2";
 
@@ -33,9 +34,10 @@ export default function IntroBannersPage() {
     setIsLoading(true);
 
     // API çağrısını yap - çok hızlı
-    api.getIntroBanners()
-      .then(res => {
-        setBanners(res.data as Banner[]);
+    api.introBanners.getAll()
+      .then(({ data, error }) => {
+        if (error) throw error;
+        setBanners(data as Banner[]);
         // Hemen loading'i kapat
         setTimeout(() => setIsLoading(false), 100);
       })
@@ -47,20 +49,57 @@ export default function IntroBannersPage() {
 
 
 
-  const handleDelete = (id: number) => {
-    if (!confirm("Silmek istediğine emin misin?")) return;
+  const handleDelete = async (id: number) => {
+    const result = await Swal.fire({
+      title: "Emin misiniz?",
+      text: "Bu banner kalıcı olarak silinecek!",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Evet, sil!",
+      cancelButtonText: "İptal",
+    });
 
-    api.deleteIntroBanner(id)
-      .then(() => {
+    if (result.isConfirmed) {
+      try {
+        // Önce banner'ı bul
+        const { data: bannerData, error: getError } = await api.introBanners.getById(id.toString());
+        if (getError) throw getError;
+
+        // Supabase Storage'dan dosyayı sil
+        if (bannerData?.image) {
+          // image_path tam URL olarak geliyor, sadece dosya adını al
+          const urlParts = bannerData.image.split('/');
+          const fileName = urlParts[urlParts.length - 1]; // Son kısım dosya adı
+          console.log('Silmeye çalışılan dosya:', fileName);
+          console.log('Orijinal path:', bannerData.image);
+          const deleteResult = await storageUtils.deleteFile(fileName);
+          console.log('Silme sonucu:', deleteResult);
+        }
+
+        // Veritabanından kaydı sil
+        const { error: deleteError } = await api.introBanners.delete(id.toString());
+        if (deleteError) throw deleteError;
+        
+        Swal.fire({
+          icon: "success",
+          title: "Başarılı!",
+          text: "Banner başarıyla silindi.",
+          timer: 2000,
+          showConfirmButton: false,
+        });
+
         setBanners(prev => prev.filter(b => b.id !== id));
-      })
-      .catch((err: any) => {
+      } catch (err) {
+        console.error("Banner silme hatası:", err);
         Swal.fire({
           icon: "error",
           title: "Hata!",
-          text: err.message,
+          text: "Banner silinirken hata oluştu.",
         });
-      });
+      }
+    }
   };
 
   if (error) return <p>Hata: {error}</p>;

@@ -13,10 +13,12 @@ interface Banner {
 interface Props {
   banner: Partial<Banner>;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;  // Burayı ekledik
+  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSubmit: () => void;
   submitText?: string;
-  showFullFields: boolean; // 3. banner mı, ona göre alan göster
+  showFullFields?: boolean; // 3. banner mı, ona göre alan göster
+  isLoading?: boolean;
+  mode?: "new" | "edit";
 }
 
 export default function BannerForm({
@@ -25,7 +27,9 @@ export default function BannerForm({
   onFileChange,
   onSubmit,
   submitText = "Kaydet",
-  showFullFields,
+  showFullFields = false,
+  isLoading = false,
+  mode = "edit",
 }: Props) {
   return (
     <div className="max-w-xl mx-auto space-y-4">
@@ -80,8 +84,16 @@ export default function BannerForm({
         </>
       )}
 
-      <button onClick={onSubmit} className="bg-blue-600 text-white px-4 py-2 rounded w-full">
-        {submitText}
+      <button 
+        onClick={onSubmit} 
+        disabled={isLoading}
+        className="bg-blue-600 text-white px-4 py-2 rounded w-full disabled:bg-gray-400"
+      >
+        {isLoading ? (
+          <span className="loading loading-spinner loading-sm"></span>
+        ) : (
+          submitText
+        )}
       </button>
     </div>
   );

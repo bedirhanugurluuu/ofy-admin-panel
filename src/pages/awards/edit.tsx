@@ -57,8 +57,9 @@ export default function AwardsEditPage() {
   const fetchAward = async () => {
     try {
       setFetching(true);
-             const response = await api.getAward(parseInt(id!));
-      const award = response.data as Award;
+      const { data, error } = await api.awards.getById(id!);
+      if (error) throw error;
+      const award = data as Award;
       setFormData({
         title: award.title,
         subtitle: award.subtitle,
@@ -85,12 +86,13 @@ export default function AwardsEditPage() {
 
     try {
       setLoading(true);
-             await api.updateAward(parseInt(id!), formData);
+      const { error } = await api.awards.update(id!, formData);
+      if (error) throw error;
       Swal.fire('Success', 'Award updated successfully', 'success');
       navigate('/admin/awards');
     } catch (error: any) {
       console.error('Error updating award:', error);
-      const errorMessage = error.response?.data?.error || 'Failed to update award';
+      const errorMessage = error.message || 'Failed to update award';
       Swal.fire('Error', errorMessage, 'error');
     } finally {
       setLoading(false);

@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "../utils/axiosInstance";
+import { supabase } from "../utils/supabaseClient";
 
 interface AuthContextType {
   user: any;
-  login: (username: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
 }
@@ -17,50 +17,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const checkSession = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        setUser(null);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const res = await axios.get<any>("/api/me");
-        setUser(res.data.user);
-      } catch (error: any) {
-        // Token geçersizse localStorage'dan sil
-        if (error.response?.status === 401 || error.response?.status === 403) {
-          localStorage.removeItem("token");
-          setUser(null);
+    // Supabase auth state'ini dinle
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          setUser(session.user);
         } else {
-          console.error("Auth check error:", error);
+          setUser(null);
         }
-      } finally {
         setLoading(false);
       }
+    );
+
+    // Mevcut session'ı kontrol et
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user);
+      }
+      setLoading(false);
     };
 
-    checkSession();
+    getSession();
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = async (username: string, password: string) => {
-    const res = await axios.post<any>("/api/login", { username, password });
-    localStorage.setItem("token", res.data.token);
+  const login = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-    // Token sonrası kullanıcıyı tekrar al
-    const meRes = await axios.get<any>("/api/me");
-    setUser(meRes.data.user);
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (data.user) {
+      setUser(data.user);
+    }
   };
 
   const logout = async () => {
     try {
-      await axios.post("/api/logout");
+      await supabase.auth.signOut();
     } catch (error) {
-      // Logout hatası olsa bile kullanıcıyı çıkış yap
       console.error("Logout error:", error);
     } finally {
-      localStorage.removeItem("token");
       setUser(null);
       navigate("/admin/login");
     }

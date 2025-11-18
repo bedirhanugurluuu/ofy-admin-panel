@@ -47,8 +47,9 @@ export default function WhatWeDoPage() {
 
   const fetchWhatWeDo = async () => {
     try {
-      const response = await api.getWhatWeDo();
-      const data = response.data as WhatWeDoContent;
+      const { data, error } = await api.whatWeDo.get();
+      if (error) throw error;
+      const whatWeDoData = data as WhatWeDoContent;
       
       setFormData({
         title: data.title || '',
@@ -77,7 +78,8 @@ export default function WhatWeDoPage() {
     setLoading(true);
 
     try {
-      await api.updateWhatWeDo(formData);
+      const { error } = await api.whatWeDo.update(formData);
+      if (error) throw error;
       
       Swal.fire({
         icon: 'success',

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useBreadcrumb } from "../contexts/BreadcrumbContext";
-import axiosInstance from "../utils/axiosInstance";
+import { api } from "../utils/api";
+import { storageUtils } from "../utils/supabaseStorage";
 import Swal from "sweetalert2";
 
 interface Project {
@@ -27,7 +28,6 @@ interface AboutContent {
   launch_title: string;
   launch_text: string;
   insights_title?: string;
-  insights_subtitle?: string;
   insight_1_title?: string;
   insight_1_text?: string;
   insight_1_project_id?: number;
@@ -63,7 +63,6 @@ export default function AboutPage() {
     launch_title: "",
     launch_text: "",
     insights_title: "Insights",
-    insights_subtitle: "",
     insight_1_title: "",
     insight_1_text: "",
     insight_1_project_id: undefined,
@@ -95,8 +94,8 @@ export default function AboutPage() {
     // Mevcut içeriği yükle
     setGlobalLoading(true);
     Promise.all([
-      axiosInstance.get<AboutContent>("/api/about"),
-      axiosInstance.get<Project[]>("/api/projects")
+      api.about.get(),
+      api.projects.getAll()
     ])
       .then(([aboutRes, projectsRes]) => {
         // API'den gelen verileri güvenli bir şekilde set et
@@ -117,7 +116,6 @@ export default function AboutPage() {
           launch_title: data.launch_title || "",
           launch_text: data.launch_text || "",
           insights_title: data.insights_title || "Insights",
-          insights_subtitle: data.insights_subtitle || "",
           insight_1_title: data.insight_1_title || "",
           insight_1_text: data.insight_1_text || "",
           insight_1_project_id: data.insight_1_project_id,
@@ -135,7 +133,7 @@ export default function AboutPage() {
           industries_title: data.industries_title || "Industries",
           industries_list: data.industries_list || ""
         });
-        setProjects(projectsRes.data);
+        setProjects(projectsRes.data || []);
         setGlobalLoading(false);
       })
       .catch(err => {
@@ -144,15 +142,37 @@ export default function AboutPage() {
       });
   }, [setBreadcrumbs, setGlobalLoading]);
 
-  const handleProjectSelect = (insightNumber: number, projectId: number) => {
-    const project = projects.find(p => p.id === projectId);
-    if (project) {
+  const handleProjectSelect = (insightNumber: number, projectId: string | number) => {
+    console.log('=== PROJECT SELECT DEBUG ===');
+    console.log('Insight number:', insightNumber);
+    console.log('Project ID (after parsing):', projectId);
+    console.log('Project ID type:', typeof projectId);
+    console.log('Available projects:', projects);
+    console.log('Project IDs:', projects.map(p => ({ id: p.id, type: typeof p.id, title: p.title })));
+    
+    if (projectId === 0 || projectId === "") {
+      // Project seçimi kaldırıldı
+      console.log('Removing project selection for insight', insightNumber);
       setContent(prev => ({
         ...prev,
-        [`insight_${insightNumber}_title`]: project.title,
-        [`insight_${insightNumber}_project_id`]: project.id
+        [`insight_${insightNumber}_title`]: "",
+        [`insight_${insightNumber}_project_id`]: null
       }));
+    } else {
+      const project = projects.find(p => p.id === projectId);
+      console.log('Found project:', project);
+      if (project) {
+        console.log('Setting project:', project.title, 'with ID:', project.id);
+        setContent(prev => ({
+          ...prev,
+          [`insight_${insightNumber}_title`]: project.title,
+          [`insight_${insightNumber}_project_id`]: project.id
+        }));
+      } else {
+        console.log('❌ Project not found! Searching for ID:', projectId);
+      }
     }
+    console.log('=== END DEBUG ===');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -160,46 +180,69 @@ export default function AboutPage() {
     setIsLoading(true);
 
     try {
-      const formData = new FormData();
-      formData.append("title", content.title || "");
-      formData.append("subtitle", content.subtitle || "");
-      formData.append("main_text", content.main_text || "");
-      formData.append("vision_title", content.vision_title || "");
-      formData.append("vision_text", content.vision_text || "");
-      formData.append("approach_title", content.approach_title || "");
-      formData.append("approach_subtitle", content.approach_subtitle || "");
-      formData.append("brand_strategy_title", content.brand_strategy_title || "");
-      formData.append("brand_strategy_text", content.brand_strategy_text || "");
-      formData.append("visual_design_title", content.visual_design_title || "");
-      formData.append("visual_design_text", content.visual_design_text || "");
-      formData.append("launch_title", content.launch_title || "");
-      formData.append("launch_text", content.launch_text || "");
-      formData.append("insights_title", content.insights_title || "");
-      formData.append("insights_subtitle", content.insights_subtitle || "");
-      formData.append("insight_1_title", content.insight_1_title || "");
-      formData.append("insight_1_text", content.insight_1_text || "");
-      formData.append("insight_1_project_id", content.insight_1_project_id?.toString() || "");
-      formData.append("insight_2_title", content.insight_2_title || "");
-      formData.append("insight_2_text", content.insight_2_text || "");
-      formData.append("insight_2_project_id", content.insight_2_project_id?.toString() || "");
-      formData.append("insight_3_title", content.insight_3_title || "");
-      formData.append("insight_3_text", content.insight_3_text || "");
-      formData.append("insight_3_project_id", content.insight_3_project_id?.toString() || "");
-      formData.append("insight_4_title", content.insight_4_title || "");
-      formData.append("insight_4_text", content.insight_4_text || "");
-      formData.append("insight_4_project_id", content.insight_4_project_id?.toString() || "");
-      formData.append("clients_title", content.clients_title || "");
-      formData.append("clients_list", content.clients_list || "");
-      formData.append("industries_title", content.industries_title || "");
-      formData.append("industries_list", content.industries_list || "");
+      let newImagePath = content.image_path;
 
+      // Yeni resim yüklendiyse
       if (imageFile) {
-        formData.append("image", imageFile);
+        console.log('=== ABOUT RESİM İŞLEMİ BAŞLADI ===');
+        console.log('Eski resim path:', content.image_path);
+        console.log('Yeni resim file:', imageFile.name);
+        
+        // Eski resmi sil (eğer varsa)
+        if (content.image_path) {
+          console.log('Eski resim siliniyor:', content.image_path);
+          await storageUtils.deleteFile(content.image_path);
+        }
+        
+        // Yeni resmi yükle
+        const timestamp = Date.now();
+        const fileName = `about-${timestamp}-${Math.random().toString(36).substring(2)}.${imageFile.name.split('.').pop()}`;
+        console.log('Yeni resim yükleniyor:', fileName);
+        
+        const { data: uploadData, error: uploadError } = await storageUtils.uploadFile(imageFile, fileName);
+        if (uploadError) throw uploadError;
+        
+        newImagePath = fileName;
+        console.log('Resim yüklendi:', newImagePath);
+        console.log('=== ABOUT RESİM İŞLEMİ BİTTİ ===');
       }
 
-      await axiosInstance.put("/api/about", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const updateData = {
+        title: content.title || "",
+        subtitle: content.subtitle || "",
+        main_text: content.main_text || "",
+        vision_title: content.vision_title || "",
+        vision_text: content.vision_text || "",
+        image_path: newImagePath,
+        approach_title: content.approach_title || "",
+        approach_subtitle: content.approach_subtitle || "",
+        brand_strategy_title: content.brand_strategy_title || "",
+        brand_strategy_text: content.brand_strategy_text || "",
+        visual_design_title: content.visual_design_title || "",
+        visual_design_text: content.visual_design_text || "",
+        launch_title: content.launch_title || "",
+        launch_text: content.launch_text || "",
+        insights_title: content.insights_title || "",
+        insight_1_title: content.insight_1_title || "",
+        insight_1_text: content.insight_1_text || "",
+        insight_1_project_id: content.insight_1_project_id || null,
+        insight_2_title: content.insight_2_title || "",
+        insight_2_text: content.insight_2_text || "",
+        insight_2_project_id: content.insight_2_project_id || null,
+        insight_3_title: content.insight_3_title || "",
+        insight_3_text: content.insight_3_text || "",
+        insight_3_project_id: content.insight_3_project_id || null,
+        insight_4_title: content.insight_4_title || "",
+        insight_4_text: content.insight_4_text || "",
+        insight_4_project_id: content.insight_4_project_id || null,
+        clients_title: content.clients_title || "",
+        clients_list: content.clients_list || "",
+        industries_title: content.industries_title || "",
+        industries_list: content.industries_list || ""
+      };
+
+      const { error } = await api.about.update(updateData);
+      if (error) throw error;
 
       Swal.fire({
         icon: "success",
@@ -415,7 +458,7 @@ export default function AboutPage() {
           <h2 className="text-xl font-bold mb-4">Insights</h2>
           
           {/* Insights Header */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div className="mb-6">
             <div>
               <label className="block text-sm font-medium mb-2">Başlık</label>
               <input
@@ -424,16 +467,6 @@ export default function AboutPage() {
                 onChange={(e) => setContent({ ...content, insights_title: e.target.value })}
                 className="input input-bordered w-full"
                 placeholder="Insights"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Alt Başlık</label>
-              <input
-                type="text"
-                value={content.insights_subtitle || ""}
-                onChange={(e) => setContent({ ...content, insights_subtitle: e.target.value })}
-                className="input input-bordered w-full"
-                placeholder="Discover our latest thinking..."
               />
             </div>
           </div>
@@ -461,8 +494,11 @@ export default function AboutPage() {
                   <div>
                     <label className="block text-sm font-medium mb-2">Project Seç</label>
                     <select
-                      value={content[`insight_${insightNumber}_project_id` as keyof AboutContent] as number || ""}
-                      onChange={(e) => handleProjectSelect(insightNumber, Number(e.target.value))}
+                      value={content[`insight_${insightNumber}_project_id` as keyof AboutContent] as string || ""}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        handleProjectSelect(insightNumber, value);
+                      }}
                       className="select select-bordered w-full"
                     >
                       <option value="">Project seçin...</option>
@@ -563,7 +599,7 @@ export default function AboutPage() {
           {content.image_path && (
             <div className="mb-4">
               <img
-                src={`http://localhost:5000${content.image_path}`}
+                src={`https://lsxafginsylkeuyzuiau.supabase.co/storage/v1/object/public/uploads/${content.image_path}`}
                 alt="Mevcut görsel"
                 className="w-64 h-48 object-cover rounded border"
               />

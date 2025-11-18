@@ -1,8 +1,9 @@
 // src/App.tsx
-import React, { useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { BreadcrumbProvider } from "./contexts/BreadcrumbContext";
+import ProtectedRoute from "./components/common/ProtectedRoute";
 import MainLayout from "./layouts/MainLayout";
 import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
@@ -24,18 +25,24 @@ import WhatWeDoPage from "./pages/whatWeDo";
 import ContactPage from "./pages/contact";
 import NewsList from "./pages/news/index";
 import NewsForm from "./components/news/NewsForm";
-import { apiClient } from "./utils/api";
+import HeaderSettingsPage from "./pages/header";
 
 export default function App() {
-  // CSRF token artık gerekli değil - Next.js API routes kullanıyoruz
-
   return (
     <Router>
       <AuthProvider>
         <BreadcrumbProvider>
           <Routes>
+            {/* Public routes */}
             <Route path="/admin/login" element={<LoginPage />} />
-            <Route path="/admin" element={<MainLayout />}>
+            
+            {/* Protected routes */}
+            <Route path="/admin" element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }>
+              <Route index element={<Navigate to="/admin/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="projects/new" element={<ProjectsNewPage />} />
@@ -48,15 +55,20 @@ export default function App() {
               <Route path="awards" element={<AwardsListPage />} />
               <Route path="awards/new" element={<AwardsNewPage />} />
               <Route path="awards/edit/:id" element={<AwardsEditPage />} />
-                                    <Route path="slider" element={<SliderListPage />} />
-                      <Route path="slider/new" element={<SliderNewPage />} />
-                      <Route path="slider/edit/:id" element={<SliderEditPage />} />
-                                            <Route path="what-we-do" element={<WhatWeDoPage />} />
-                      <Route path="contact" element={<ContactPage />} />
-                      <Route path="news/edit/:id" element={<NewsForm />} />
+              <Route path="slider" element={<SliderListPage />} />
+              <Route path="slider/new" element={<SliderNewPage />} />
+              <Route path="slider/edit/:id" element={<SliderEditPage />} />
+              <Route path="what-we-do" element={<WhatWeDoPage />} />
+              <Route path="contact" element={<ContactPage />} />
+              <Route path="news/edit/:id" element={<NewsForm />} />
               <Route path="news/new" element={<NewsForm />} />
               <Route path="news" element={<NewsList />} />
+              <Route path="header" element={<HeaderSettingsPage />} />
             </Route>
+            
+            {/* Redirect root to login */}
+            <Route path="/" element={<Navigate to="/admin/login" replace />} />
+            <Route path="*" element={<Navigate to="/admin/login" replace />} />
           </Routes>
         </BreadcrumbProvider>
       </AuthProvider>

@@ -1,23 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
 import { getApiUrl } from '../../config/api';
+import { storageUtils } from '../../utils/supabaseStorage';
 import Swal from 'sweetalert2';
 import { useNavigate, Link, useParams } from 'react-router-dom';
 import { useBreadcrumb } from '../../contexts/BreadcrumbContext';
 import { ArrowLeft } from 'lucide-react';
 
-declare global {
-  interface ImportMeta {
-    readonly env: {
-      readonly VITE_API_BASE_URL?: string;
-    };
-  }
-}
+
 
 
 
 interface SliderItem {
-  id: number;
+  id: string;
   title: string;
   subtitle: string;
   sub_subtitle: string;
@@ -57,22 +52,22 @@ export default function SliderEditPage() {
   const fetchSliderItem = async () => {
     try {
       setFetching(true);
-      const response = await api.getSlider();
-      const item = response.data.find(item => item.id === parseInt(id!));
+      const { data, error } = await api.slider.getById(id!);
+      if (error) throw error;
       
-      if (!item) {
+      if (!data) {
         Swal.fire('Error', 'Slider item not found', 'error');
         navigate('/admin/slider');
         return;
       }
 
       setFormData({
-        title: item.title,
-        subtitle: item.subtitle,
-        sub_subtitle: item.sub_subtitle,
-        order_index: item.order_index
+        title: data.title,
+        subtitle: data.subtitle,
+        sub_subtitle: data.sub_subtitle,
+        order_index: data.order_index
       });
-      setCurrentImage(item.image_path);
+      setCurrentImage(data.image_path);
     } catch (error) {
       console.error('Error fetching slider item:', error);
       Swal.fire('Error', 'Failed to fetch slider item', 'error');
@@ -92,17 +87,42 @@ export default function SliderEditPage() {
 
     try {
       setLoading(true);
-      const formDataToSend = new FormData();
-      formDataToSend.append('title', formData.title);
-      formDataToSend.append('subtitle', formData.subtitle);
-      formDataToSend.append('sub_subtitle', formData.sub_subtitle);
-      formDataToSend.append('order_index', formData.order_index.toString());
       
+      let newImagePath = currentImage;
+
+      // Yeni resim yüklendiyse
       if (selectedImage) {
-        formDataToSend.append('image', selectedImage);
+        console.log('=== SLIDER RESİM İŞLEMİ BAŞLADI ===');
+        console.log('Eski resim path:', currentImage);
+        console.log('Yeni resim file:', selectedImage.name);
+        
+        // Eski resmi sil (eğer varsa)
+        if (currentImage) {
+          console.log('Eski resim siliniyor:', currentImage);
+          await storageUtils.deleteFile(currentImage);
+        }
+        
+        // Yeni resmi yükle
+        const timestamp = Date.now();
+        const fileName = `slider-${timestamp}-${Math.random().toString(36).substring(2)}.${selectedImage.name.split('.').pop()}`;
+        console.log('Yeni resim yükleniyor:', fileName);
+        
+        const { data: uploadData, error: uploadError } = await storageUtils.uploadFile(selectedImage, fileName);
+        if (uploadError) throw uploadError;
+        
+        newImagePath = fileName;
+        console.log('Resim yüklendi:', newImagePath);
+        console.log('=== SLIDER RESİM İŞLEMİ BİTTİ ===');
       }
 
-      await api.updateSliderItem(parseInt(id!), formDataToSend);
+      const { error } = await api.slider.update(id!, {
+        title: formData.title,
+        subtitle: formData.subtitle,
+        sub_subtitle: formData.sub_subtitle,
+        order_index: formData.order_index,
+        image_path: newImagePath
+      });
+      if (error) throw error;
       Swal.fire('Success', 'Slider item updated successfully', 'success');
       navigate('/admin/slider');
     } catch (error: any) {
@@ -219,7 +239,7 @@ export default function SliderEditPage() {
                 <div className="mt-2">
                   <p className="text-sm text-gray-600 mb-1">Current image:</p>
                   <img
-                                         src={`${getApiUrl('slider')}/uploads/${currentImage}`}
+                    src={`https://lsxafginsylkeuyzuiau.supabase.co/storage/v1/object/public/uploads/${currentImage}`}
                     alt="Current"
                     className="h-16 w-16 object-cover rounded"
                   />
@@ -232,7 +252,7 @@ export default function SliderEditPage() {
             <button
               type="submit"
               disabled={loading}
-              className="btn btn-primary flex items-center gap-2"
+              className="btn btn-primary flex items-center gap-2 text-white"
             >
               {loading ? (
                 <>
@@ -245,7 +265,7 @@ export default function SliderEditPage() {
             </button>
             <Link
               to="/admin/slider"
-              className="btn btn-ghost"
+              className="btn btn-ghost text-gray-700 hover:text-gray-900"
             >
               Cancel
             </Link>

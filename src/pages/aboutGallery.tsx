@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useBreadcrumb } from "../contexts/BreadcrumbContext";
-import axiosInstance from "../utils/axiosInstance";
+import { api } from "../utils/api";
+import { storageUtils } from "../utils/supabaseStorage";
 import Swal from "sweetalert2";
 
 interface GalleryImage {
@@ -29,8 +30,9 @@ export default function AboutGalleryPage() {
   const loadImages = async () => {
     setGlobalLoading(true);
     try {
-      const response = await axiosInstance.get<GalleryImage[]>("/api/about-gallery");
-      setImages(response.data);
+      const { data, error } = await api.aboutGallery.getAll();
+      if (error) throw error;
+      setImages(data || []);
     } catch (err) {
       console.error("Gallery yüklenemedi:", err);
       Swal.fire({
@@ -50,12 +52,25 @@ export default function AboutGalleryPage() {
     setUploading(true);
 
     try {
-      const formData = new FormData();
-      formData.append("image", file);
+      // Dosya adını oluştur
+      const timestamp = Date.now();
+      const fileName = `about-gallery-${timestamp}-${Math.random().toString(36).substring(2)}.${file.name.split('.').pop()}`;
+      
+      // Supabase Storage'a yükle
+      const { data: uploadData, error: uploadError } = await storageUtils.uploadFile(file, fileName);
+      if (uploadError) throw uploadError;
 
-      await axiosInstance.post("/api/about-gallery", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+      // Veritabanına kaydet
+      const { data: dbData, error: dbError } = await api.aboutGallery.create({
+        image_path: `/uploads/${fileName}`,
+        order_index: images.length
       });
+      
+      if (dbError) {
+        // Eğer veritabanı kaydı başarısız olursa, yüklenen dosyayı sil
+        await storageUtils.deleteFile(fileName);
+        throw dbError;
+      }
 
       Swal.fire({
         icon: "success",
@@ -71,7 +86,7 @@ export default function AboutGalleryPage() {
       Swal.fire({
         icon: "error",
         title: "Hata!",
-        text: err.response?.data?.error || "Resim yüklenirken hata oluştu.",
+        text: err.message || "Resim yüklenirken hata oluştu.",
       });
     } finally {
       setUploading(false);
@@ -94,7 +109,24 @@ export default function AboutGalleryPage() {
     if (result.isConfirmed) {
       setIsLoading(true);
       try {
-        await axiosInstance.delete(`/api/about-gallery/${id}`);
+        // Önce resmi bul
+        const { data: imageData, error: getError } = await api.aboutGallery.getById(id);
+        if (getError) throw getError;
+
+        // Supabase Storage'dan dosyayı sil
+        if (imageData?.image_path) {
+          // image_path tam URL olarak geliyor, sadece dosya adını al
+          const urlParts = imageData.image_path.split('/');
+          const fileName = urlParts[urlParts.length - 1]; // Son kısım dosya adı
+          console.log('Silmeye çalışılan dosya:', fileName);
+          console.log('Orijinal path:', imageData.image_path);
+          const deleteResult = await storageUtils.deleteFile(fileName);
+          console.log('Silme sonucu:', deleteResult);
+        }
+
+        // Veritabanından kaydı sil
+        const { error: deleteError } = await api.aboutGallery.delete(id);
+        if (deleteError) throw deleteError;
         
         Swal.fire({
           icon: "success",
@@ -153,7 +185,7 @@ export default function AboutGalleryPage() {
           <div key={image.id} className="card bg-base-100 shadow-lg">
             <figure className="relative">
               <img
-                src={`http://localhost:5000${image.image_path}`}
+                src={`https://lsxafginsylkeuyzuiau.supabase.co/storage/v1/object/public${image.image_path}`}
                 alt={`Gallery image ${image.order_index + 1}`}
                 className="w-full h-64 object-cover"
               />

@@ -1,18 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
 import { getApiUrl } from '../../config/api';
+import { storageUtils } from '../../utils/supabaseStorage';
 import Swal from 'sweetalert2';
 import { useBreadcrumb } from '../../contexts/BreadcrumbContext';
 import PageLayout from '../../components/common/PageLayout';
 import DataTable, { ImageRenderer, TruncatedText } from '../../components/common/DataTable';
 
-declare global {
-  interface ImportMeta {
-    readonly env: {
-      readonly VITE_API_BASE_URL?: string;
-    };
-  }
-}
+
 
 
 
@@ -44,8 +39,9 @@ export default function SliderListPage() {
   const fetchSliderItems = async () => {
     try {
       setLoading(true);
-      const response = await api.getSlider();
-      setSliderItems(response.data);
+      const { data, error } = await api.slider.getAll();
+      if (error) throw error;
+      setSliderItems(data || []);
     } catch (error) {
       console.error('Error fetching slider items:', error);
       Swal.fire('Error', 'Failed to fetch slider items', 'error');
@@ -67,7 +63,17 @@ export default function SliderListPage() {
 
     if (result.isConfirmed) {
       try {
-        await api.deleteSliderItem(id);
+        // Önce slider item'ı bul
+        const sliderItem = sliderItems.find(item => item.id === id);
+        
+        // Resmi sil (eğer varsa)
+        if (sliderItem?.image_path) {
+          await storageUtils.deleteFile(sliderItem.image_path);
+        }
+
+        // Veritabanından sil
+        const { error } = await api.slider.delete(id.toString());
+        if (error) throw error;
         Swal.fire('Deleted!', 'Slider item has been deleted.', 'success');
         fetchSliderItems();
       } catch (error) {

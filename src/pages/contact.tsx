@@ -53,8 +53,9 @@ export default function ContactPage() {
 
   const fetchContact = async () => {
     try {
-      const response = await api.getContact();
-      const data = response.data as ContactContent;
+      const { data, error } = await api.contact.get();
+      if (error) throw error;
+      const contactData = data as ContactContent;
 
       setFormData({
         title: data.title || '',
@@ -96,7 +97,8 @@ export default function ContactPage() {
         formDataToSend.append('image', selectedImage);
       }
 
-      await api.updateContact(formDataToSend);
+      const { error } = await api.contact.update(formData);
+      if (error) throw error;
       Swal.fire({
         icon: 'success',
         title: 'Başarılı!',
@@ -248,11 +250,11 @@ export default function ContactPage() {
            {currentImage && (
              <div className="mt-4">
                <p className="text-sm text-gray-600 mb-2">Mevcut Görsel:</p>
-                               <img
-                  src={`${getApiUrl('contact')}/uploads/${currentImage}`}
-                  alt="Current contact image"
-                  className="w-64 h-20 object-cover rounded-lg"
-                />
+               <img
+                 src={`https://lsxafginsylkeuyzuiau.supabase.co/storage/v1/object/public/uploads/${currentImage}`}
+                 alt="Current contact image"
+                 className="w-64 h-20 object-cover rounded-lg"
+               />
              </div>
            )}
          </div>

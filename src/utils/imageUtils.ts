@@ -1,4 +1,4 @@
-const BASE = "http://localhost:5000";
+const BASE = "https://lsxafginsylkeuyzuiau.supabase.co/storage/v1/object/public";
 
 // Görsel URL'lerini backend base URL ile birleştiren utility fonksiyonu
 export const getImageUrl = (imagePath: string): string => {

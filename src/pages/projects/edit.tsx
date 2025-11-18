@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { api } from '../../utils/api';
 import { useBreadcrumb } from "../../contexts/BreadcrumbContext";
 import { getImageUrl, getFallbackImageUrl } from "../../utils/imageUtils";
+import { storageUtils } from "../../utils/supabaseStorage";
 import { Project } from "../../types/Project";
 import Swal from "sweetalert2";
 
@@ -11,7 +12,7 @@ const ProjectsEditPage = () => {
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState("");
-  const [gallery, setGallery] = useState<string[]>([]);
+  const [gallery, setGallery] = useState<any[]>([]);
   const [newImages, setNewImages] = useState<File[]>([]);
   const [newThumbnail, setNewThumbnail] = useState<File | null>(null);
   const [newBanner, setNewBanner] = useState<File | null>(null);
@@ -35,7 +36,9 @@ const ProjectsEditPage = () => {
     const fetchProject = async () => {
       setIsLoading(true);
       try {
-        const res = await axiosInstance.get<Project>(`/api/projects/${id}`);
+        const { data, error } = await api.projects.getById(id!);
+        if (error) throw error;
+        const res = { data };
 
         setProject(res.data);
         setTitle(res.data.title);
@@ -45,7 +48,19 @@ const ProjectsEditPage = () => {
         setClientName(res.data.client_name || "");
         setYear(res.data.year || "");
         setRole(res.data.role || "");
-        setGallery(res.data.gallery_images || []);
+        // featured alanını kontrol et
+        console.log('Project featured:', res.data.featured);
+        // Project gallery'den resimleri çek
+        if (id) {
+          const { data: galleryData, error: galleryError } = await api.projectGallery.getByProjectId(id);
+          if (galleryError) {
+            console.error("Gallery yükleme hatası:", galleryError);
+            setGallery([]);
+          } else {
+            setGallery(galleryData || []);
+            console.log('Gallery data:', galleryData);
+          }
+        }
         setIsLoading(false);
       } catch (err: any) {
         console.error("Proje getirme hatası:", err.response?.status, err.message);
@@ -61,30 +76,71 @@ const ProjectsEditPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const formData = new FormData();
-      formData.append("title", title);
-      formData.append("subtitle", subtitle);
-      formData.append("description", description);
-      formData.append("external_link", externalLink);
-      formData.append("client_name", clientName);
-      formData.append("year", year);
-      formData.append("role", role);
-      formData.append("slug", project?.slug || "");
-      formData.append("featured_order", project?.featured_order?.toString() || "");
+      // Yeni resimleri yükle
+      let newThumbnailPath = project?.thumbnail_media;
+      let newBannerPath = project?.banner_media;
 
-      // Yeni thumbnail yüklendiyse ekle
       if (newThumbnail) {
-        formData.append("thumbnail_media", newThumbnail);
+        // Eski thumbnail'ı sil
+        if (project?.thumbnail_media) {
+          const urlParts = project.thumbnail_media.split('/');
+          const fileName = urlParts[urlParts.length - 1];
+          await storageUtils.deleteFile(fileName);
+        }
+        
+        // Yeni thumbnail'ı yükle
+        const timestamp = Date.now();
+        const fileName = `project-thumbnail-${timestamp}-${Math.random().toString(36).substring(2)}.${newThumbnail.name.split('.').pop()}`;
+        const { data: uploadData, error: uploadError } = await storageUtils.uploadFile(newThumbnail, fileName);
+        if (uploadError) throw uploadError;
+        newThumbnailPath = `/uploads/${fileName}`;
       }
 
-      // Yeni banner yüklendiyse ekle
       if (newBanner) {
-        formData.append("banner_media", newBanner);
+        // Eski banner'ı sil
+        if (project?.banner_media) {
+          const urlParts = project.banner_media.split('/');
+          const fileName = urlParts[urlParts.length - 1];
+          await storageUtils.deleteFile(fileName);
+        }
+        
+        // Yeni banner'ı yükle
+        const timestamp = Date.now();
+        const fileName = `project-banner-${timestamp}-${Math.random().toString(36).substring(2)}.${newBanner.name.split('.').pop()}`;
+        const { data: uploadData, error: uploadError } = await storageUtils.uploadFile(newBanner, fileName);
+        if (uploadError) throw uploadError;
+        newBannerPath = `/uploads/${fileName}`;
       }
 
-      await axiosInstance.put(`/api/projects/${id}`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const updateData: any = {};
+      
+      // Sadece değişen field'ları ekle
+      if (title !== project?.title) updateData.title = title;
+      if (subtitle !== project?.subtitle) updateData.subtitle = subtitle;
+      if (description !== project?.description) updateData.description = description;
+      if (externalLink !== project?.external_link) updateData.external_link = externalLink;
+      if (clientName !== project?.client_name) updateData.client_name = clientName;
+      if (year !== project?.year) updateData.year = year;
+      if (role !== project?.role) updateData.role = role;
+      
+      // Resim path'lerini ekle
+      if (newThumbnail) updateData.thumbnail_media = newThumbnailPath;
+      if (newBanner) updateData.banner_media = newBannerPath;
+      
+      // Bu field'ları her zaman gönder (gerekli olabilir)
+      updateData.slug = project?.slug || "";
+      updateData.featured = project?.featured || false; // is_featured değil, featured
+      updateData.is_featured = project?.is_featured || false;
+      updateData.featured_order = project?.featured_order || 0;
+      
+      console.log('Update data:', updateData);
+      console.log('Project ID:', id);
+      
+      const { error } = await api.projects.update(id!, updateData);
+      if (error) {
+        console.error('Update error:', error);
+        throw error;
+      }
 
       Swal.fire({
         icon: "success",
@@ -131,14 +187,33 @@ const ProjectsEditPage = () => {
       return;
     }
 
-    const formData = new FormData();
-    newImages.forEach((file) => formData.append("images", file));
-
     try {
-      await axiosInstance.post(`/api/projects/${id}/gallery`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const uploadedImages: any[] = [];
+      
+      // Her resmi Supabase Storage'a yükle ve project_gallery tablosuna kaydet
+      for (const file of newImages) {
+        const timestamp = Date.now();
+        const fileName = `project-gallery-${timestamp}-${Math.random().toString(36).substring(2)}.${file.name.split('.').pop()}`;
+        
+        const { data: uploadData, error: uploadError } = await storageUtils.uploadFile(file, fileName);
+        if (uploadError) throw uploadError;
+        
+        const imagePath = `/uploads/${fileName}`;
+        
+        // Project gallery tablosuna kaydet
+        const { data: galleryData, error: galleryError } = await api.projectGallery.create({
+          project_id: id,
+          image_path: imagePath,
+          sort: gallery.length + uploadedImages.length
+        });
+        
+        if (galleryError) throw galleryError;
+        uploadedImages.push(galleryData);
+      }
 
+      // Mevcut gallery'ye yeni resimleri ekle
+      const updatedGallery = [...gallery, ...uploadedImages];
+      
       Swal.fire({
         icon: "success",
         title: "Başarılı!",
@@ -146,12 +221,11 @@ const ProjectsEditPage = () => {
         timer: 2000,
         showConfirmButton: false,
       });
+      
       setNewImages([]);
-      // Galeriyi yeniden yükle
-      const res = await axiosInstance.get<Project>(`/api/projects/${id}`);
-      setGallery(res.data.gallery_images || []);
+      setGallery(updatedGallery);
     } catch (err) {
-      console.error(err);
+      console.error("Gallery upload hatası:", err);
       Swal.fire({
         icon: "error",
         title: "Hata!",
@@ -160,7 +234,7 @@ const ProjectsEditPage = () => {
     }
   };
 
-  const handleDeleteImage = async (filename: string) => {
+  const handleDeleteImage = async (galleryItem: any) => {
     const result = await Swal.fire({
       title: "Emin misiniz?",
       text: "Bu görseli silmek istediğinize emin misiniz?",
@@ -173,13 +247,27 @@ const ProjectsEditPage = () => {
     if (!result.isConfirmed) return;
 
     try {
-      await axiosInstance.delete(`/api/projects/${id}/gallery`, {
-        params: { image: filename },
-      });
+      // Önce gallery item'ı bul
+      const { data: galleryData, error: getError } = await api.projectGallery.getById(galleryItem.id);
+      if (getError) throw getError;
 
-      // Güncel galeriyi backend'den çek
-      const res = await axiosInstance.get<Project>(`/api/projects/${id}`);
-      setGallery(res.data.gallery_images || []);
+      // Supabase Storage'dan dosyayı sil
+      if (galleryData?.image_path) {
+        const urlParts = galleryData.image_path.split('/');
+        const fileName = urlParts[urlParts.length - 1];
+        console.log('Silmeye çalışılan dosya:', fileName);
+        console.log('Orijinal path:', galleryData.image_path);
+        const deleteResult = await storageUtils.deleteFile(fileName);
+        console.log('Silme sonucu:', deleteResult);
+      }
+
+      // Project gallery tablosundan kaydı sil
+      const { error: deleteError } = await api.projectGallery.delete(galleryItem.id);
+      if (deleteError) throw deleteError;
+
+      // Galeriyi güncelle (silinen dosyayı çıkar)
+      const updatedGallery = gallery.filter(img => img.id !== galleryItem.id);
+      setGallery(updatedGallery);
 
       Swal.fire({
         icon: "success",
@@ -189,7 +277,7 @@ const ProjectsEditPage = () => {
         showConfirmButton: false,
       });
     } catch (err) {
-      console.error(err);
+      console.error("Gallery silme hatası:", err);
       Swal.fire({
         icon: "error",
         title: "Hata!",
@@ -410,6 +498,29 @@ const ProjectsEditPage = () => {
           />
         </div>
 
+        <div>
+          <label style={labelStyle}>Featured (Anasayfada Göster):</label>
+          <select
+            value={project?.is_featured ? "true" : "false"}
+            onChange={(e) => setProject(prev => prev ? {...prev, is_featured: e.target.value === "true"} : null)}
+            style={inputStyle}
+          >
+            <option value="false">Hayır</option>
+            <option value="true">Evet</option>
+          </select>
+        </div>
+
+        <div>
+          <label style={labelStyle}>Featured Sırası:</label>
+          <input
+            type="number"
+            value={project?.featured_order || 0}
+            onChange={(e) => setProject(prev => prev ? {...prev, featured_order: parseInt(e.target.value) || 0} : null)}
+            style={inputStyle}
+            min="0"
+          />
+        </div>
+
         <button type="submit" style={buttonStyle}>Güncelle</button>
       </form>
 
@@ -424,13 +535,12 @@ const ProjectsEditPage = () => {
 
         {gallery.length > 0 ? (
           gallery.map((img, idx) => {
-            const filename = img.replace(/\\/g, "/");
-            const imageUrl = getImageUrl(img);
-            const isVideo = /\.(mp4|webm|ogg|mov)$/i.test(img);
-
+            const filename = img.image_path?.replace(/\\/g, "/") || "";
+            const imageUrl = getImageUrl(img.image_path || "");
+            const isVideo = /\.(mp4|webm|ogg|mov)$/i.test(img.image_path || "");
 
             return (
-              <div key={idx} style={{ position: "relative" }}>
+              <div key={img.id || idx} style={{ position: "relative" }}>
                 {isVideo ? (
                   <div
                     style={{
@@ -460,12 +570,12 @@ const ProjectsEditPage = () => {
                         opacity: 0,
                         transition: "opacity 0.3s",
                       }}
-                                             onLoadedData={(e) => {
-                         e.currentTarget.style.opacity = "1";
-                       }}
-                       onError={(e) => {
-                         e.currentTarget.style.display = "none";
-                       }}
+                      onLoadedData={(e) => {
+                        e.currentTarget.style.opacity = "1";
+                      }}
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
                       controls
                       muted
                     />
@@ -480,13 +590,13 @@ const ProjectsEditPage = () => {
                       objectFit: "cover",
                       height: "150px",
                     }}
-                                         onError={(e) => {
-                       e.currentTarget.src = getFallbackImageUrl();
-                     }}
+                    onError={(e) => {
+                      e.currentTarget.src = getFallbackImageUrl();
+                    }}
                   />
                 )}
                 <button
-                  onClick={() => handleDeleteImage(filename)}
+                  onClick={() => handleDeleteImage(img)}
                   style={{
                     position: "absolute",
                     top: "5px",

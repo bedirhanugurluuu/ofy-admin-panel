@@ -1,5 +1,6 @@
 import React, { useEffect, useState, ChangeEvent } from "react";
-import axiosInstance from "../../utils/axiosInstance";
+import { api } from "../../utils/api";
+import { storageUtils } from "../../utils/supabaseStorage";
 import Swal from "sweetalert2";
 
 interface ProjectResponse {
@@ -90,32 +91,56 @@ const ProjectForm: React.FC<{ mode: "new" | "edit" }> = ({ mode }) => {
     }
 
     try {
-      const formData = new FormData();
-      formData.append("title", title);
-      formData.append("subtitle", subtitle);
-      formData.append("slug", slug);
-      formData.append("description", description);
-      formData.append("external_link", externalLink);
-      formData.append("client_name", clientName);
-      formData.append("year", year);
-      formData.append("role", role);
-      formData.append("is_featured", isFeatured ? "1" : "0");
-      if (featuredOrder.trim() !== "") {
-        formData.append("featured_order", featuredOrder);
-      }
-      if (thumbnailMedia) formData.append("thumbnail_media", thumbnailMedia);
-      if (bannerMedia) formData.append("banner_media", bannerMedia);
-      if (videoUrl.trim() !== "") formData.append("video_url", videoUrl);
+      // Resimleri yükle
+      let thumbnailPath = "";
+      let bannerPath = "";
 
-      let res;
+      if (thumbnailMedia) {
+        const timestamp = Date.now();
+        const fileName = `project-thumbnail-${timestamp}-${Math.random().toString(36).substring(2)}.${thumbnailMedia.name.split('.').pop()}`;
+        const { data: uploadData, error: uploadError } = await storageUtils.uploadFile(thumbnailMedia, fileName);
+        if (uploadError) throw uploadError;
+        thumbnailPath = `/uploads/${fileName}`;
+      }
+
+      if (bannerMedia) {
+        const timestamp = Date.now();
+        const fileName = `project-banner-${timestamp}-${Math.random().toString(36).substring(2)}.${bannerMedia.name.split('.').pop()}`;
+        const { data: uploadData, error: uploadError } = await storageUtils.uploadFile(bannerMedia, fileName);
+        if (uploadError) throw uploadError;
+        bannerPath = `/uploads/${fileName}`;
+      }
+
+      const projectData = {
+        title,
+        subtitle,
+        slug,
+        description,
+        external_link: externalLink,
+        client_name: clientName,
+        year,
+        role,
+        is_featured: isFeatured,
+        featured_order: parseInt(featuredOrder) || 0,
+        thumbnail_media: thumbnailPath || null,
+        banner_media: bannerPath || null,
+        video_url: videoUrl || null,
+        gallery_images: []
+      };
+
       if (mode === "new") {
-        res = await axiosInstance.post("/api/projects", formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        const { data, error } = await api.projects.create(projectData);
+        if (error) throw error;
       } else {
-        res = await axiosInstance.put(`/api/projects/${slug}`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        // Edit mode için slug'ı kullanarak projeyi bul ve güncelle
+        const { data: existingProjects, error: getError } = await api.projects.getAll();
+        if (getError) throw getError;
+        
+        const existingProject = existingProjects.find(p => p.slug === slug);
+        if (!existingProject) throw new Error("Proje bulunamadı");
+        
+        const { error } = await api.projects.update(existingProject.id.toString(), projectData);
+        if (error) throw error;
       }
 
       Swal.fire({

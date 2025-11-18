@@ -6,13 +6,7 @@ import { useBreadcrumb } from '../../contexts/BreadcrumbContext';
 import PageLayout from '../../components/common/PageLayout';
 import DataTable, { TruncatedText, LinkRenderer } from '../../components/common/DataTable';
 
-declare global {
-  interface ImportMeta {
-    readonly env: {
-      readonly VITE_API_BASE_URL?: string;
-    };
-  }
-}
+
 
 
 
@@ -44,8 +38,9 @@ export default function AwardsListPage() {
   const fetchAwards = async () => {
     try {
       setLoading(true);
-      const response = await api.getAwards();
-             setAwards(response.data as Award[]);
+      const { data, error } = await api.awards.getAll();
+      if (error) throw error;
+      setAwards(data as Award[]);
     } catch (error) {
       console.error('Error fetching awards:', error);
       Swal.fire('Error', 'Failed to fetch awards', 'error');
@@ -67,7 +62,9 @@ export default function AwardsListPage() {
 
     if (result.isConfirmed) {
       try {
-        await api.deleteAward(id);
+        // Veritabanından sil
+        const { error } = await api.awards.delete(id.toString());
+        if (error) throw error;
         Swal.fire('Deleted!', 'Award has been deleted.', 'success');
         fetchAwards();
       } catch (error) {

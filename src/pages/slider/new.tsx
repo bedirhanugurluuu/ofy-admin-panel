@@ -1,18 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
 import { getApiUrl } from '../../config/api';
+import { storageUtils } from '../../utils/supabaseStorage';
 import Swal from 'sweetalert2';
 import { useNavigate, Link } from 'react-router-dom';
 import { useBreadcrumb } from '../../contexts/BreadcrumbContext';
 import { ArrowLeft } from 'lucide-react';
 
-declare global {
-  interface ImportMeta {
-    readonly env: {
-      readonly VITE_API_BASE_URL?: string;
-    };
-  }
-}
+
 
 
 
@@ -51,14 +46,24 @@ export default function SliderNewPage() {
 
     try {
       setLoading(true);
-      const formDataToSend = new FormData();
-      formDataToSend.append('title', formData.title);
-      formDataToSend.append('subtitle', formData.subtitle);
-      formDataToSend.append('sub_subtitle', formData.sub_subtitle);
-      formDataToSend.append('order_index', formData.order_index.toString());
-      formDataToSend.append('image', selectedImage);
-
-      await api.createSliderItem(formDataToSend);
+      
+      // Resmi yükle
+      const timestamp = Date.now();
+      const fileName = `slider-${timestamp}-${Math.random().toString(36).substring(2)}.${selectedImage.name.split('.').pop()}`;
+      console.log('Slider resim yükleniyor:', fileName);
+      
+      const { data: uploadData, error: uploadError } = await storageUtils.uploadFile(selectedImage, fileName);
+      console.log('Upload result:', { uploadData, uploadError });
+      if (uploadError) throw uploadError;
+      
+      const { error } = await api.slider.create({
+        title: formData.title,
+        subtitle: formData.subtitle,
+        sub_subtitle: formData.sub_subtitle,
+        order_index: formData.order_index,
+        image_path: fileName
+      });
+      if (error) throw error;
       Swal.fire('Success', 'Slider item created successfully', 'success');
       navigate('/admin/slider');
     } catch (error: any) {
@@ -169,7 +174,7 @@ export default function SliderNewPage() {
             <button
               type="submit"
               disabled={loading}
-              className="btn btn-primary flex items-center gap-2"
+              className="btn btn-primary flex items-center gap-2 text-white"
             >
               {loading ? (
                 <>
@@ -182,7 +187,7 @@ export default function SliderNewPage() {
             </button>
             <Link
               to="/admin/slider"
-              className="btn btn-ghost"
+              className="btn btn-ghost text-gray-700 hover:text-gray-900"
             >
               Cancel
             </Link>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import axiosInstance from '../../utils/axiosInstance';
+import { api } from '../../utils/api';
+import { storageUtils } from '../../utils/supabaseStorage';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 interface NewsFormData {
@@ -11,8 +12,8 @@ interface NewsFormData {
   slug: string;
   content: string;
   aspect_ratio: string;
-  is_featured: boolean;
-  featured_order: number;
+  featured: boolean;
+  image_path?: string;
 }
 
 export default function NewsForm() {
@@ -28,8 +29,7 @@ export default function NewsForm() {
     slug: '',
     content: '',
     aspect_ratio: 'aspect-square',
-    is_featured: false,
-    featured_order: 0,
+    featured: false,
   });
 
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -76,8 +76,13 @@ export default function NewsForm() {
   const fetchNews = async () => {
     try {
       setFetching(true);
-      const response = await axiosInstance.get<any>(`/api/news/id/${id}`);
-      const news = response.data;
+      const { data, error } = await api.news.getById(id!);
+      if (error) throw error;
+      const news = data;
+      
+      console.log('=== NEWS FETCH DEBUG ===');
+      console.log('News data:', news);
+      console.log('Image path from DB:', news.image_path);
       
       setFormData({
         title: news.title || '',
@@ -87,13 +92,15 @@ export default function NewsForm() {
         slug: news.slug || '',
         content: news.content || '',
         aspect_ratio: news.aspect_ratio || 'aspect-square',
-        is_featured: news.is_featured || false,
-        featured_order: news.featured_order || 0,
+        featured: news.featured || false,
+        image_path: news.image_path || '',
       });
       
       if (news.image_path) {
-        setCurrentImage(`http://localhost:5000/uploads/${news.image_path}`);
+        setCurrentImage(`https://lsxafginsylkeuyzuiau.supabase.co/storage/v1/object/public/uploads/${news.image_path}`);
       }
+      
+      console.log('=== END NEWS FETCH DEBUG ===');
     } catch (err) {
       setError('News yüklenirken hata oluştu');
       console.error('Error fetching news:', err);
@@ -144,30 +151,54 @@ export default function NewsForm() {
       setLoading(true);
       setError(null);
 
-      const submitData = new FormData();
-      submitData.append('title', formData.title);
-      submitData.append('category_text', formData.category_text);
-      submitData.append('photographer', formData.photographer);
-      submitData.append('subtitle', formData.subtitle);
-      submitData.append('slug', formData.slug);
-      submitData.append('content', formData.content);
-      submitData.append('aspect_ratio', formData.aspect_ratio);
-      submitData.append('is_featured', formData.is_featured.toString());
-      submitData.append('featured_order', formData.featured_order.toString());
+      let newImagePath = formData.image_path;
 
+      // Yeni resim yüklendiyse
       if (imageFile) {
-        submitData.append('image', imageFile);
+        console.log('=== NEWS RESİM İŞLEMİ BAŞLADI ===');
+        console.log('FormData image_path:', formData.image_path);
+        console.log('Is editing:', isEditing);
+        console.log('Image file:', imageFile.name);
+        
+        // Eski resmi sil (eğer varsa)
+        if (isEditing && formData.image_path) {
+          console.log('=== NEWS RESİM SİLME İŞLEMİ ===');
+          console.log('Eski resim path:', formData.image_path);
+          console.log('Silme işlemi başlıyor...');
+          await storageUtils.deleteFile(formData.image_path);
+          console.log('=== SİLME İŞLEMİ TAMAMLANDI ===');
+        }
+        
+        // Yeni resmi yükle
+        const timestamp = Date.now();
+        const fileName = `news-${timestamp}-${Math.random().toString(36).substring(2)}.${imageFile.name.split('.').pop()}`;
+        console.log('Yeni resim yükleniyor:', fileName);
+        
+        const { data: uploadData, error: uploadError } = await storageUtils.uploadFile(imageFile, fileName);
+        if (uploadError) throw uploadError;
+        
+        newImagePath = fileName;
+        console.log('Resim yüklendi:', newImagePath);
+        console.log('=== NEWS RESİM İŞLEMİ BİTTİ ===');
       }
 
+      // Form data'yı güncelle
+      const updateData = {
+        ...formData,
+        image_path: newImagePath
+      };
+
       if (isEditing) {
-        await axiosInstance.put(`/api/news/${id}`, submitData);
+        const { error } = await api.news.update(id!, updateData);
+        if (error) throw error;
       } else {
-        await axiosInstance.post('/api/news', submitData);
+        const { error } = await api.news.create(updateData);
+        if (error) throw error;
       }
 
       navigate('/admin/news');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Bir hata oluştu');
+      setError(err.message || 'Bir hata oluştu');
       console.error('Error saving news:', err);
     } finally {
       setLoading(false);
@@ -422,27 +453,14 @@ export default function NewsForm() {
             </select>
           </div>
 
-          {/* Featured Order */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Öne Çıkma Sırası
-            </label>
-            <input
-              type="number"
-              name="featured_order"
-              value={formData.featured_order}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              min="0"
-            />
-          </div>
+
 
           {/* Is Featured */}
           <div className="flex items-center">
             <input
               type="checkbox"
-              name="is_featured"
-              checked={formData.is_featured}
+              name="featured"
+              checked={formData.featured}
               onChange={handleInputChange}
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
             />

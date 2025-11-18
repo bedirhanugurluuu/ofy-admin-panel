@@ -7,13 +7,7 @@ import { useBreadcrumb } from '../../contexts/BreadcrumbContext';
 import { FormLayout } from '../../components/common/PageLayout';
 import { FormInput, FormButton, FormActions } from '../../components/common/FormComponents';
 
-declare global {
-  interface ImportMeta {
-    readonly env: {
-      readonly VITE_API_BASE_URL?: string;
-    };
-  }
-}
+
 
 
 
@@ -47,7 +41,8 @@ export default function AwardsNewPage() {
 
     try {
       setLoading(true);
-             await api.createAward(formData);
+             const { error } = await api.awards.create(formData);
+             if (error) throw error;
       Swal.fire('Success', 'Award created successfully', 'success');
       navigate('/admin/awards');
     } catch (error: any) {

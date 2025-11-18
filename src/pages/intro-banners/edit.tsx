@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import BannerForm from "../../components/intro-banners/BannerForm";
 import { api } from '../../utils/api';
+import { storageUtils } from '../../utils/supabaseStorage';
 import Swal from "sweetalert2";
 import { useBreadcrumb } from "../../contexts/BreadcrumbContext";
 
@@ -19,8 +20,9 @@ export default function EditIntroBannerPage() {
   const { id } = useParams<{ id: string }>();
   const [banner, setBanner] = useState<Partial<Banner>>({});
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { setBreadcrumbs, setIsLoading } = useBreadcrumb();
+  const { setBreadcrumbs, setIsLoading: setGlobalLoading } = useBreadcrumb();
 
   useEffect(() => {
     // Breadcrumb'ı ayarla
@@ -37,17 +39,18 @@ export default function EditIntroBannerPage() {
   useEffect(() => {
     if (!id) return;
 
-    setIsLoading(true);
-    api.getIntroBanner(parseInt(id!))
-      .then(res => {
-        setBanner(res.data as Banner);
-        setIsLoading(false);
+    setGlobalLoading(true);
+    api.introBanners.getById(id)
+      .then(({ data, error }) => {
+        if (error) throw error;
+        setBanner(data as Banner);
+        setGlobalLoading(false);
       })
       .catch(err => {
         setError(err.message);
-        setIsLoading(false);
+        setGlobalLoading(false);
       });
-  }, [id, setIsLoading]);
+  }, [id, setGlobalLoading]);
 
   // Yeni seçilen dosya için state
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -62,12 +65,11 @@ export default function EditIntroBannerPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setImageFile(e.target.files[0]);
-      // Mevcut image URL'sini temizleyebiliriz (isteğe bağlı)
-      setBanner(prev => ({ ...prev, image: "" }));
+      // Mevcut image URL'sini koruyoruz ki eski resmi silebilelim
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Validation: 3. banner ise tüm alanlar gerekli
     if (banner.order_index === 3) {
       if (
@@ -75,35 +77,72 @@ export default function EditIntroBannerPage() {
         !banner.button_text ||
         !banner.button_link
       ) {
-        alert("Lütfen 3. banner için tüm alanları doldurun!");
+        Swal.fire({
+          icon: "warning",
+          title: "Uyarı!",
+          text: "Lütfen 3. banner için tüm alanları doldurun!",
+        });
         return;
       }
     }
 
     if (!banner.image && !imageFile) {
-      alert("Lütfen görsel seçin!");
+      Swal.fire({
+        icon: "warning",
+        title: "Uyarı!",
+        text: "Lütfen görsel seçin!",
+      });
       return;
     }
 
-    const formData = new FormData();
+    setIsLoading(true);
 
-    if (imageFile) {
-      formData.append("image", imageFile);
-    }
+    try {
+      let newImagePath = banner.image;
 
-    // Mevcut image URL varsa backend'in onu kullanması için
-    if (banner.image && !imageFile) {
-      formData.append("imageUrl", banner.image);
-    }
+      // Yeni resim yüklendiyse
+      if (imageFile) {
+        // Eski resmi sil
+        if (banner.image) {
+          // image_path tam URL olarak geliyor, sadece dosya adını al
+          let fileName = '';
+          if (banner.image.includes('/uploads/')) {
+            // /uploads/filename.jpg formatında
+            fileName = banner.image.split('/uploads/')[1];
+          } else if (banner.image.includes('supabase.co')) {
+            // https://supabase.co/... formatında
+            const urlParts = banner.image.split('/');
+            fileName = urlParts[urlParts.length - 1];
+          } else {
+            // Direkt dosya adı
+            fileName = banner.image;
+          }
+          
+          if (fileName) {
+            await storageUtils.deleteFile(fileName);
+          }
+        }
+        
+        // Yeni resmi yükle
+        const timestamp = Date.now();
+        const fileName = `introbanner-${timestamp}-${Math.random().toString(36).substring(2)}.${imageFile.name.split('.').pop()}`;
+        const { data: uploadData, error: uploadError } = await storageUtils.uploadFile(imageFile, fileName);
+        if (uploadError) throw uploadError;
+        newImagePath = `/uploads/${fileName}`;
+      }
 
-    formData.append("order_index", String(banner.order_index ?? 1));
-    formData.append("title_line1", banner.title_line1 || "");
-    formData.append("title_line2", banner.title_line2 || "");
-    formData.append("button_text", banner.button_text || "");
-    formData.append("button_link", banner.button_link || "");
+      // Banner'ı güncelle
+      const { error } = await api.introBanners.update(id!, {
+        order_index: banner.order_index ?? 1,
+        title_line1: banner.title_line1 || "",
+        title_line2: banner.title_line2 || "",
+        button_text: banner.button_text || "",
+        button_link: banner.button_link || "",
+        image: newImagePath
+      });
 
-    api.updateIntroBanner(parseInt(id!), formData)
-    .then(() => {
+      if (error) throw error;
+
       Swal.fire({
         icon: "success",
         title: "Başarılı!",
@@ -112,14 +151,16 @@ export default function EditIntroBannerPage() {
         showConfirmButton: false,
       });
       navigate("/admin/intro-banners");
-    })
-    .catch(err => {
+    } catch (err: any) {
+      console.error("Banner güncelleme hatası:", err);
       Swal.fire({
         icon: "error",
         title: "Hata!",
-        text: err.message,
+        text: err.message || "Güncelleme sırasında hata oluştu.",
       });
-    });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -132,6 +173,8 @@ export default function EditIntroBannerPage() {
         onSubmit={handleSubmit}
         submitText="Güncelle"
         showFullFields={banner.order_index === 3}
+        isLoading={isLoading}
+        mode="edit"
       />
     </div>
   );

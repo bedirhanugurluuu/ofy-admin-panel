@@ -23,9 +23,10 @@ export default function ProjectsPage() {
         setIsLoading(true);
 
         // API çağrısını yap - çok hızlı
-        api.getProjects()
-            .then((res) => {
-                setProjects(res.data as Project[]);
+        api.projects.getAll()
+            .then(({ data, error }) => {
+                if (error) throw error;
+                setProjects(data as Project[]);
                 // Hemen loading'i kapat
                 setTimeout(() => setIsLoading(false), 100);
             })
