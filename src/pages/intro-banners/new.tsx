@@ -13,6 +13,8 @@ interface Banner {
   title_line2: string;
   button_text: string;
   button_link: string;
+  scroll_text: string;
+  project_id: string;
 }
 
 interface IntroBanner {
@@ -33,6 +35,8 @@ export default function NewIntroBannerPage() {
     title_line2: "",
     button_text: "",
     button_link: "",
+    scroll_text: "",
+    project_id: "",
   });
 
   const navigate = useNavigate();
@@ -82,7 +86,7 @@ export default function NewIntroBannerPage() {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setBanner(prev => ({
       ...prev,
@@ -133,7 +137,9 @@ export default function NewIntroBannerPage() {
         title_line1: banner.title_line1 || "",
         title_line2: banner.title_line2 || "",
         button_text: banner.button_text || "",
-        button_link: banner.button_link || ""
+        button_link: banner.button_link || "",
+        scroll_text: banner.scroll_text || "",
+        project_id: banner.project_id || null
       };
 
       // Veritabanına kaydet

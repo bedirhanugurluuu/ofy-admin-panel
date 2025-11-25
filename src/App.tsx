@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { AuthProvider } from "./contexts/AuthContext";
 import { BreadcrumbProvider } from "./contexts/BreadcrumbContext";
 import ProtectedRoute from "./components/common/ProtectedRoute";
+import SessionManager from "./components/common/SessionManager";
 import MainLayout from "./layouts/MainLayout";
 import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
@@ -15,9 +16,6 @@ import IntroBannersNewPage from "./pages/intro-banners/new";
 import IntroBannersEditPage from "./pages/intro-banners/edit";
 import AboutPage from "./pages/about";
 import AboutGalleryPage from "./pages/aboutGallery";
-import AwardsListPage from "./pages/awards/index";
-import AwardsNewPage from "./pages/awards/new";
-import AwardsEditPage from "./pages/awards/edit";
 import SliderListPage from "./pages/slider/index";
 import SliderNewPage from "./pages/slider/new";
 import SliderEditPage from "./pages/slider/edit";
@@ -26,6 +24,12 @@ import ContactPage from "./pages/contact";
 import NewsList from "./pages/news/index";
 import NewsForm from "./components/news/NewsForm";
 import HeaderSettingsPage from "./pages/header";
+import ServicesPage from "./pages/services/index";
+import ServicesNewPage from "./pages/services/new";
+import ServicesEditPage from "./pages/services/edit";
+import AboutBannerPage from "./pages/about-banner";
+import FooterPage from "./pages/footer";
+import IPManagementPage from "./pages/ip-management";
 
 export default function App() {
   return (
@@ -39,7 +43,9 @@ export default function App() {
             {/* Protected routes */}
             <Route path="/admin" element={
               <ProtectedRoute>
-                <MainLayout />
+                <SessionManager>
+                  <MainLayout />
+                </SessionManager>
               </ProtectedRoute>
             }>
               <Route index element={<Navigate to="/admin/dashboard" replace />} />
@@ -52,9 +58,6 @@ export default function App() {
               <Route path="intro-banners/edit/:id" element={<IntroBannersEditPage />} />
               <Route path="about" element={<AboutPage />} />
               <Route path="about-gallery" element={<AboutGalleryPage />} />
-              <Route path="awards" element={<AwardsListPage />} />
-              <Route path="awards/new" element={<AwardsNewPage />} />
-              <Route path="awards/edit/:id" element={<AwardsEditPage />} />
               <Route path="slider" element={<SliderListPage />} />
               <Route path="slider/new" element={<SliderNewPage />} />
               <Route path="slider/edit/:id" element={<SliderEditPage />} />
@@ -64,6 +67,12 @@ export default function App() {
               <Route path="news/new" element={<NewsForm />} />
               <Route path="news" element={<NewsList />} />
               <Route path="header" element={<HeaderSettingsPage />} />
+              <Route path="services" element={<ServicesPage />} />
+              <Route path="services/new" element={<ServicesNewPage />} />
+              <Route path="services/edit/:id" element={<ServicesEditPage />} />
+              <Route path="about-banner" element={<AboutBannerPage />} />
+              <Route path="footer" element={<FooterPage />} />
+              <Route path="ip-management" element={<IPManagementPage />} />
             </Route>
             
             {/* Redirect root to login */}

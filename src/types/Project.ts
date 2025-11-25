@@ -8,6 +8,7 @@ export interface Project {
   featured: boolean; // is_featured değil, featured
   is_featured: boolean;
   featured_order: number;
+  order?: number; // Genel sıralama
   description: string;
   client_name?: string;
   year?: string; // backend'de string olarak geliyor

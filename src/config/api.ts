@@ -44,9 +44,6 @@ export const API_ENDPOINTS = {
   // Intro Banners
   introBanners: '/intro-banners',
   
-  // Awards
-  awards: '/awards',
-  
   // Slider
   slider: '/slider',
   

@@ -23,6 +23,9 @@ const ProjectsEditPage = () => {
   const [role, setRole] = useState("");
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
+  const [slug, setSlug] = useState("");
+  const [order, setOrder] = useState<number | undefined>(undefined);
+  const [updatingGallerySorts, setUpdatingGallerySorts] = useState<Set<string>>(new Set());
   const { setBreadcrumbs, setIsLoading } = useBreadcrumb();
 
   useEffect(() => {
@@ -43,6 +46,8 @@ const ProjectsEditPage = () => {
         setProject(res.data);
         setTitle(res.data.title);
         setSubtitle(res.data.subtitle);
+        setSlug(res.data.slug || "");
+        setOrder(res.data.order ?? undefined);
         setDescription(res.data.description || "");
         setExternalLink(res.data.external_link || "");
         setClientName(res.data.client_name || "");
@@ -117,6 +122,8 @@ const ProjectsEditPage = () => {
       // Sadece değişen field'ları ekle
       if (title !== project?.title) updateData.title = title;
       if (subtitle !== project?.subtitle) updateData.subtitle = subtitle;
+      if (slug !== project?.slug) updateData.slug = slug;
+      if (order !== project?.order) updateData.order = order;
       if (description !== project?.description) updateData.description = description;
       if (externalLink !== project?.external_link) updateData.external_link = externalLink;
       if (clientName !== project?.client_name) updateData.client_name = clientName;
@@ -128,7 +135,7 @@ const ProjectsEditPage = () => {
       if (newBanner) updateData.banner_media = newBannerPath;
       
       // Bu field'ları her zaman gönder (gerekli olabilir)
-      updateData.slug = project?.slug || "";
+      if (!updateData.slug) updateData.slug = project?.slug || "";
       updateData.featured = project?.featured || false; // is_featured değil, featured
       updateData.is_featured = project?.is_featured || false;
       updateData.featured_order = project?.featured_order || 0;
@@ -230,6 +237,52 @@ const ProjectsEditPage = () => {
         icon: "error",
         title: "Hata!",
         text: "Galeri yüklenirken hata oluştu.",
+      });
+    }
+  };
+
+  const handleGallerySortChange = async (galleryItemId: string, newSort: number) => {
+    setUpdatingGallerySorts((prev) => new Set(prev).add(galleryItemId));
+
+    // Optimistic update
+    setGallery((prev) =>
+      prev.map((item) => (item.id === galleryItemId ? { ...item, sort: newSort } : item))
+    );
+
+    try {
+      const { error } = await api.projectGallery.update(galleryItemId, { sort: newSort });
+      
+      if (error) {
+        throw error;
+      }
+
+      // Başarılı olduğunda listeyi yeniden sırala
+      setGallery((prev) =>
+        [...prev].sort((a, b) => (a.sort || 0) - (b.sort || 0))
+      );
+    } catch (err: any) {
+      console.error("Gallery sort update error:", err);
+      
+      // Hata durumunda eski değere geri dön
+      const { data: galleryData } = await api.projectGallery.getById(galleryItemId);
+      if (galleryData) {
+        setGallery((prev) =>
+          prev.map((item) => (item.id === galleryItemId ? { ...item, sort: galleryData.sort } : item))
+        );
+      }
+
+      Swal.fire({
+        icon: "error",
+        title: "Hata!",
+        text: "Sıralama güncellenirken hata oluştu.",
+        timer: 2000,
+        showConfirmButton: false,
+      });
+    } finally {
+      setUpdatingGallerySorts((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(galleryItemId);
+        return newSet;
       });
     }
   };
@@ -448,6 +501,20 @@ const ProjectsEditPage = () => {
         </div>
 
         <div>
+          <label style={labelStyle}>Slug (URL):</label>
+          <input
+            type="text"
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            placeholder="proje-url-kodu"
+            style={inputStyle}
+          />
+          <small style={{ fontSize: "12px", color: "#666", display: "block", marginTop: "0.25rem" }}>
+            URL'de görünecek kod (örn: proje-adi)
+          </small>
+        </div>
+
+        <div>
           <label style={labelStyle}>Açıklama:</label>
           <textarea
             value={description}
@@ -499,6 +566,21 @@ const ProjectsEditPage = () => {
         </div>
 
         <div>
+          <label style={labelStyle}>Sıralama (Order):</label>
+          <input
+            type="number"
+            value={order ?? ''}
+            onChange={(e) => setOrder(e.target.value ? parseInt(e.target.value) : undefined)}
+            style={inputStyle}
+            min="0"
+            placeholder="Sıralama numarası"
+          />
+          <small style={{ fontSize: "12px", color: "#666", display: "block", marginTop: "0.25rem" }}>
+            Düşük sayılar önce gösterilir. Boş bırakılırsa en sona eklenir.
+          </small>
+        </div>
+
+        <div>
           <label style={labelStyle}>Featured (Anasayfada Göster):</label>
           <select
             value={project?.is_featured ? "true" : "false"}
@@ -534,10 +616,11 @@ const ProjectsEditPage = () => {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "1rem", marginTop: "1rem" }}>
 
         {gallery.length > 0 ? (
-          gallery.map((img, idx) => {
+          [...gallery].sort((a, b) => (a.sort || 0) - (b.sort || 0)).map((img, idx) => {
             const filename = img.image_path?.replace(/\\/g, "/") || "";
             const imageUrl = getImageUrl(img.image_path || "");
             const isVideo = /\.(mp4|webm|ogg|mov)$/i.test(img.image_path || "");
+            const isUpdatingSort = updatingGallerySorts.has(img.id);
 
             return (
               <div key={img.id || idx} style={{ position: "relative" }}>
@@ -612,6 +695,39 @@ const ProjectsEditPage = () => {
                 >
                   Sil
                 </button>
+                {/* Sort Input */}
+                <div style={{
+                  position: "absolute",
+                  bottom: "5px",
+                  left: "5px",
+                  right: "5px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  background: "rgba(255,255,255,0.9)",
+                  padding: "4px",
+                  borderRadius: "4px",
+                }}>
+                  <label style={{ fontSize: "10px", color: "#666", whiteSpace: "nowrap" }}>Sıra:</label>
+                  <input
+                    type="number"
+                    value={img.sort ?? ''}
+                    onChange={(e) => {
+                      const newSort = parseInt(e.target.value) || 0;
+                      handleGallerySortChange(img.id, newSort);
+                    }}
+                    style={{
+                      width: "50px",
+                      padding: "2px 4px",
+                      fontSize: "11px",
+                      border: "1px solid #ccc",
+                      borderRadius: "3px",
+                      opacity: isUpdatingSort ? 0.5 : 1,
+                    }}
+                    disabled={isUpdatingSort}
+                    min="0"
+                  />
+                </div>
               </div>
             );
           })

@@ -14,6 +14,8 @@ interface Banner {
   button_text: string;
   button_link: string;
   order_index: number;
+  scroll_text?: string;
+  project_id?: string;
 }
 
 export default function EditIntroBannerPage() {
@@ -55,7 +57,7 @@ export default function EditIntroBannerPage() {
   // Yeni seçilen dosya için state
   const [imageFile, setImageFile] = useState<File | null>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setBanner({
       ...banner,
       [e.target.name]: e.target.value,
@@ -138,6 +140,8 @@ export default function EditIntroBannerPage() {
         title_line2: banner.title_line2 || "",
         button_text: banner.button_text || "",
         button_link: banner.button_link || "",
+        scroll_text: banner.scroll_text || "",
+        project_id: banner.project_id || null,
         image: newImagePath
       });
 

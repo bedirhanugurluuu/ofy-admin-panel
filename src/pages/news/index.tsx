@@ -118,7 +118,7 @@ export default function NewsList() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                  Görsel
                </th>
                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -181,7 +181,7 @@ export default function NewsList() {
                         : 'bg-gray-100 text-gray-800'
                     }`}
                   >
-                                         {item.featured ? 'Öne Çıkan' : 'Öne Çıkmayan'}
+                    {item.featured ? 'Öne Çıkan' : 'Öne Çıkmayan'}
                   </button>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -193,7 +193,7 @@ export default function NewsList() {
                       to={`/admin/news/edit/${item.id}`}
                       className="text-indigo-600 hover:text-indigo-900"
                     >
-                                             Düzenle
+                      Düzenle
                      </Link>
                      <button
                        onClick={() => deleteNews(item.id)}
@@ -210,7 +210,7 @@ export default function NewsList() {
 
         {news.length === 0 && (
           <div className="text-center py-12">
-                         <p className="text-gray-500">Henüz haber makalesi bulunamadı.</p>
+            <p className="text-gray-500">Henüz haber makalesi bulunamadı.</p>
              <Link
                to="/admin/news/new"
                className="mt-4 inline-block bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"

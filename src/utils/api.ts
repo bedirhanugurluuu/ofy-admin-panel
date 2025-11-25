@@ -8,6 +8,7 @@ export const api = {
       const { data, error } = await supabase
         .from('projects')
         .select('*')
+        .order('order', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: false })
       return { data, error }
     },
@@ -137,53 +138,6 @@ export const api = {
     delete: async (id: string) => {
       const { error } = await supabase
         .from('intro_banners')
-        .delete()
-        .eq('id', id)
-      return { error }
-    }
-  },
-
-  // Awards
-  awards: {
-    getAll: async () => {
-      const { data, error } = await supabase
-        .from('awards')
-        .select('*')
-        .order('created_at', { ascending: false })
-      return { data, error }
-    },
-
-    getById: async (id: string) => {
-      const { data, error } = await supabase
-        .from('awards')
-        .select('*')
-        .eq('id', id)
-        .single()
-      return { data, error }
-    },
-
-    create: async (award: any) => {
-      const { data, error } = await supabase
-        .from('awards')
-        .insert(award)
-        .select()
-        .single()
-      return { data, error }
-    },
-
-    update: async (id: string, updates: any) => {
-      const { data, error } = await supabase
-        .from('awards')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single()
-      return { data, error }
-    },
-
-    delete: async (id: string) => {
-      const { error } = await supabase
-        .from('awards')
         .delete()
         .eq('id', id)
       return { error }
@@ -412,6 +366,16 @@ export const api = {
       const { data, error } = await supabase
         .from('project_gallery')
         .insert(image)
+        .select()
+        .single()
+      return { data, error }
+    },
+
+    update: async (id: string, updates: any) => {
+      const { data, error } = await supabase
+        .from('project_gallery')
+        .update(updates)
+        .eq('id', id)
         .select()
         .single()
       return { data, error }

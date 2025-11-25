@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { getImageUrl, getFallbackImageUrl } from "../../utils/imageUtils";
+import { fetchProjects, Project } from "../../config/supabase";
 
 interface Banner {
   id?: number;
@@ -8,6 +9,8 @@ interface Banner {
   title_line2?: string;
   button_text?: string;
   button_link?: string;
+  scroll_text?: string;    // "Scroll to view more" metni
+  project_id?: string;     // Bağlantılı proje ID'si
 }
 
 interface Props {
@@ -31,6 +34,11 @@ export default function BannerForm({
   isLoading = false,
   mode = "edit",
 }: Props) {
+  const [projects, setProjects] = useState<Project[]>([]);
+
+  useEffect(() => {
+    fetchProjects().then(setProjects);
+  }, []);
   return (
     <div className="max-w-xl mx-auto space-y-4">
       {/* Dosya inputu */}
@@ -48,6 +56,33 @@ export default function BannerForm({
             }}
           />
         )}
+      </div>
+
+      {/* Scroll text ve project seçimi her zaman göster */}
+      <input
+        name="scroll_text"
+        value={banner.scroll_text || ""}
+        onChange={onChange}
+        placeholder="Scroll to view more metni (örn: Scroll to view more)"
+        className="border p-2 w-full"
+      />
+      
+      {/* Proje seçimi */}
+      <div>
+        <label className="block mb-1 font-semibold">Bağlantılı Proje Seç</label>
+        <select
+          name="project_id"
+          value={banner.project_id || ""}
+          onChange={onChange}
+          className="border p-2 w-full"
+        >
+          <option value="">Proje seçin...</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.title}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Eğer 3. banner ise, yazı alanları göster */}

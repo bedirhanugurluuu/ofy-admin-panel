@@ -3,24 +3,45 @@ import Swal from 'sweetalert2';
 import { useBreadcrumb } from '../contexts/BreadcrumbContext';
 import { FormLayout } from '../components/common/PageLayout';
 import { FormInput, FormTextarea, FormButton, FormActions, FormFileInput } from '../components/common/FormComponents';
-import { api } from '../utils/api';
-import { getApiUrl } from '../config/api';
+import { fetchContact, updateContact, ContactContent, uploadContactImage, deleteLogoImage } from '../config/supabase';
 
-interface ContactContent {
-  id: number;
-  title: string;
-  phone: string;
-  email: string;
-  instagram: string;
-  linkedin: string;
-  address_line1: string;
-  address_line2: string;
-  studio_hours_weekdays: string;
-  studio_hours_weekend: string;
-  image_path?: string;
-  created_at: string;
-  updated_at: string;
-}
+// Görsel URL'lerini normalize eden utility fonksiyonu
+const normalizeImageUrl = (imagePath: string) => {
+  if (!imagePath) return "";
+
+  let p = imagePath.trim();
+
+  // Eğer zaten tam URL ise (http/https ile başlıyorsa) direkt döndür
+  if (p.startsWith("http://") || p.startsWith("https://")) {
+    return p;
+  }
+
+  // Eğer data URL ise direkt döndür
+  if (p.startsWith("data:")) {
+    return p;
+  }
+
+  // Eğer Supabase Storage URL formatında ise direkt döndür
+  if (p.includes("supabase.co/storage/v1/object/public/")) {
+    return p;
+  }
+
+  // Eğer local path ise (/uploads/ ile başlıyorsa) Supabase URL'ine dönüştür
+  if (p.startsWith("/uploads/")) {
+    const fileName = p.replace("/uploads/", "");
+    return `https://lsxafginsylkeuyzuiau.supabase.co/storage/v1/object/public/uploads/${fileName}`;
+  }
+
+  // Eğer sadece dosya adı ise, uploads bucket'ına yönlendir
+  if (!p.includes("/") && !p.includes("\\")) {
+    return `https://lsxafginsylkeuyzuiau.supabase.co/storage/v1/object/public/uploads/${p}`;
+  }
+
+  // Diğer durumlar için fallback
+  return p;
+};
+
+
 
 export default function ContactPage() {
   const { setBreadcrumbs } = useBreadcrumb();
@@ -30,15 +51,11 @@ export default function ContactPage() {
     title: '',
     phone: '',
     email: '',
-    instagram: '',
-    linkedin: '',
-    address_line1: '',
-    address_line2: '',
-    studio_hours_weekdays: '',
-    studio_hours_weekend: ''
+    social_items: [{ name: '', link: '' }]
   });
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [currentImage, setCurrentImage] = useState<string>('');
+  const [currentImagePath, setCurrentImagePath] = useState<string>('');
 
   useEffect(() => {
     setBreadcrumbs([
@@ -48,33 +65,56 @@ export default function ContactPage() {
   }, [setBreadcrumbs]);
 
   useEffect(() => {
-    fetchContact();
+    fetchContactData();
   }, []);
 
-  const fetchContact = async () => {
+  const fetchContactData = async () => {
     try {
-      const { data, error } = await api.contact.get();
-      if (error) throw error;
-      const contactData = data as ContactContent;
-
-      setFormData({
-        title: data.title || '',
-        phone: data.phone || '',
-        email: data.email || '',
-        instagram: data.instagram || '',
-        linkedin: data.linkedin || '',
-        address_line1: data.address_line1 || '',
-        address_line2: data.address_line2 || '',
-        studio_hours_weekdays: data.studio_hours_weekdays || '',
-        studio_hours_weekend: data.studio_hours_weekend || ''
-      });
-      setCurrentImage(data.image_path || '');
+      const data = await fetchContact();
+      
+      // Eğer veri yoksa varsayılan değerler kullan
+      if (!data) {
+        setFormData({
+          title: 'Contact',
+          phone: '+45123456789',
+          email: 'hello@lucastudio.com',
+          social_items: [
+            { name: 'Instagram', link: '#' },
+            { name: 'LinkedIn', link: '#' }
+          ]
+        });
+        setCurrentImage('');
+        setCurrentImagePath('');
+        setCurrentImagePath('');
+      } else {
+        setFormData({
+          title: data.title || '',
+          phone: data.phone || '',
+          email: data.email || '',
+          social_items: data.social_items || [{ name: '', link: '' }]
+        });
+        setCurrentImage(normalizeImageUrl(data.image_path || ''));
+        setCurrentImagePath(data.image_path || '');
+      }
     } catch (error) {
       console.error('Error fetching contact content:', error);
+      
+      // Hata durumunda da varsayılan değerler kullan
+              setFormData({
+          title: 'Contact',
+          phone: '+45123456789',
+          email: 'hello@lucastudio.com',
+          social_items: [
+            { name: 'Instagram', link: '#' },
+            { name: 'LinkedIn', link: '#' }
+          ]
+        });
+      setCurrentImage('');
+      
       Swal.fire({
-        icon: 'error',
-        title: 'Hata',
-        text: 'İçerik yüklenirken bir hata oluştu.'
+        icon: 'warning',
+        title: 'Uyarı',
+        text: 'Veritabanından veri yüklenemedi. Varsayılan değerler kullanılıyor.'
       });
     } finally {
       setFetching(false);
@@ -86,32 +126,63 @@ export default function ContactPage() {
     setLoading(true);
 
     try {
-      const formDataToSend = new FormData();
-      // Add form fields
-      Object.entries(formData).forEach(([key, value]) => {
-        formDataToSend.append(key, value);
-      });
+      let newImagePath = currentImagePath;
 
-      // Add image if selected
+      // Eğer yeni resim seçildiyse yükle
       if (selectedImage) {
-        formDataToSend.append('image', selectedImage);
+        // Eski resmi sil
+        if (currentImagePath) {
+          await deleteLogoImage(currentImagePath);
+        }
+
+        // Yeni resmi yükle
+        const uploadedImagePath = await uploadContactImage(selectedImage);
+        if (uploadedImagePath) {
+          newImagePath = uploadedImagePath;
+        }
       }
 
-      const { error } = await api.contact.update(formData);
-      if (error) throw error;
+      // Form verilerini hazırla
+      const contactData = {
+        title: formData.title,
+        phone: formData.phone,
+        email: formData.email,
+        social_items: formData.social_items.filter(item => item.name.trim() && item.link.trim()), // Boş olanları filtrele
+        image_path: newImagePath
+      };
+
+      const result = await updateContact(contactData);
+      if (!result) {
+        throw new Error('Failed to update contact');
+      }
+      
       Swal.fire({
         icon: 'success',
         title: 'Başarılı!',
-        text: 'Contact içeriği başarıyla güncellendi.'
+        text: 'Contact içeriği başarıyla kaydedildi.'
       });
+      
       // Reset selected image
       setSelectedImage(null);
+      
+      // Verileri yeniden yükle
+      await fetchContactData();
     } catch (error) {
       console.error('Error updating contact content:', error);
+      
+      // Daha detaylı hata mesajı
+      let errorMessage = 'İçerik kaydedilirken bir hata oluştu. Lütfen tekrar deneyin.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('contact')) {
+          errorMessage = 'Contact tablosu bulunamadı. Lütfen veritabanını kontrol edin.';
+        }
+      }
+      
       Swal.fire({
         icon: 'error',
         title: 'Hata',
-        text: 'İçerik güncellenirken bir hata oluştu.'
+        text: errorMessage
       });
     } finally {
       setLoading(false);
@@ -156,15 +227,15 @@ export default function ContactPage() {
           <FormInput
             label="Telefon"
             value={formData.phone}
-            onChange={(value) => setFormData({ ...formData, phone: value })}
-            placeholder="+45 123 456 789"
+            onChange={(value) => setFormData({ ...formData, phone: value.replace(/\s+/g, '') })}
+            placeholder="+45123456789"
             required
           />
 
           <FormInput
             label="E-posta"
             value={formData.email}
-            onChange={(value) => setFormData({ ...formData, email: value })}
+            onChange={(value) => setFormData({ ...formData, email: value.replace(/\s+/g, '') })}
             placeholder="hello@lucastudio.com"
             type="email"
             required
@@ -175,66 +246,62 @@ export default function ContactPage() {
         <div className="space-y-6">
           <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Sosyal Medya</h3>
 
-          <FormInput
-            label="Instagram URL"
-            value={formData.instagram}
-            onChange={(value) => setFormData({ ...formData, instagram: value })}
-            placeholder="https://instagram.com/lucastudio"
-            type="url"
-            required
-          />
+          {formData.social_items.map((item, index) => (
+            <div key={index} className="flex gap-4 items-end">
+              <div className="flex-1">
+                <FormInput
+                  label={`Sosyal Medya ${index + 1} - İsim`}
+                  value={item.name}
+                  onChange={(value) => {
+                    const newSocialItems = [...formData.social_items];
+                    newSocialItems[index].name = value;
+                    setFormData({ ...formData, social_items: newSocialItems });
+                  }}
+                  placeholder="Instagram"
+                  required
+                />
+              </div>
+              <div className="flex-1">
+                <FormInput
+                  label={`Sosyal Medya ${index + 1} - Link`}
+                  value={item.link}
+                  onChange={(value) => {
+                    const newSocialItems = [...formData.social_items];
+                    newSocialItems[index].link = value;
+                    setFormData({ ...formData, social_items: newSocialItems });
+                  }}
+                  placeholder="https://instagram.com/username"
+                  type="url"
+                  required
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const newSocialItems = formData.social_items.filter((_, i) => i !== index);
+                  setFormData({ ...formData, social_items: newSocialItems });
+                }}
+                className="btn btn-error btn-sm"
+                disabled={formData.social_items.length <= 1}
+              >
+                Sil
+              </button>
+            </div>
+          ))}
 
-          <FormInput
-            label="LinkedIn URL"
-            value={formData.linkedin}
-            onChange={(value) => setFormData({ ...formData, linkedin: value })}
-            placeholder="https://linkedin.com/company/lucastudio"
-            type="url"
-            required
-          />
+          <button
+            type="button"
+            onClick={() => {
+              setFormData({
+                ...formData,
+                social_items: [...formData.social_items, { name: '', link: '' }]
+              });
+            }}
+            className="btn btn-outline btn-sm"
+          >
+            + Sosyal Medya Ekle
+          </button>
         </div>
-
-        {/* Address Section */}
-        <div className="space-y-6">
-          <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Adres</h3>
-          
-          <FormInput
-            label="Adres Satırı 1"
-            value={formData.address_line1}
-            onChange={(value) => setFormData({ ...formData, address_line1: value })}
-            placeholder="12 Nyhavn Street"
-            required
-          />
-
-          <FormInput
-            label="Adres Satırı 2"
-            value={formData.address_line2}
-            onChange={(value) => setFormData({ ...formData, address_line2: value })}
-            placeholder="Copenhagen, Denmark, 1051"
-            required
-          />
-        </div>
-
-                 {/* Studio Hours Section */}
-         <div className="space-y-6">
-           <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Stüdyo Çalışma Saatleri</h3>
-           
-           <FormInput
-             label="Hafta İçi"
-             value={formData.studio_hours_weekdays}
-             onChange={(value) => setFormData({ ...formData, studio_hours_weekdays: value })}
-             placeholder="Monday to Friday: 9:00 AM – 6:00 PM"
-             required
-           />
-
-           <FormInput
-             label="Hafta Sonu"
-             value={formData.studio_hours_weekend}
-             onChange={(value) => setFormData({ ...formData, studio_hours_weekend: value })}
-             placeholder="Saturday & Sunday: Closed"
-             required
-           />
-         </div>
 
          {/* Image Section */}
          <div className="space-y-6">
@@ -251,10 +318,49 @@ export default function ContactPage() {
              <div className="mt-4">
                <p className="text-sm text-gray-600 mb-2">Mevcut Görsel:</p>
                <img
-                 src={`https://lsxafginsylkeuyzuiau.supabase.co/storage/v1/object/public/uploads/${currentImage}`}
+                 src={currentImage}
                  alt="Current contact image"
                  className="w-64 h-20 object-cover rounded-lg"
                />
+               <button
+                 type="button"
+                 onClick={async () => {
+                   try {
+                     if (currentImagePath) {
+                       await deleteLogoImage(currentImagePath);
+                       setCurrentImage('');
+                       setCurrentImagePath('');
+                       
+                       // Veritabanından da kaldır
+                       const contactData = {
+                         title: formData.title,
+                         phone: formData.phone,
+                         email: formData.email,
+                         social_items: formData.social_items.filter(item => item.name.trim() && item.link.trim()),
+                         image_path: undefined
+                       };
+                       
+                       await updateContact(contactData);
+                       
+                       Swal.fire({
+                         icon: 'success',
+                         title: 'Başarılı!',
+                         text: 'Görsel başarıyla silindi.'
+                       });
+                     }
+                   } catch (error) {
+                     console.error('Error deleting image:', error);
+                     Swal.fire({
+                       icon: 'error',
+                       title: 'Hata',
+                       text: 'Görsel silinirken bir hata oluştu.'
+                     });
+                   }
+                 }}
+                 className="btn btn-error btn-sm mt-2"
+               >
+                 Görseli Sil
+               </button>
              </div>
            )}
          </div>

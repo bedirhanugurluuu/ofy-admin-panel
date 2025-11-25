@@ -64,7 +64,7 @@ export function FormFileInput({
         type="file"
         onChange={(e) => onChange(e.target.files?.[0] || null)}
         accept={accept}
-        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
         required={required}
       />
       {helperText && (

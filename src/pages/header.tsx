@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
+import { useBreadcrumb } from '../contexts/BreadcrumbContext';
+import { FormLayout } from '../components/common/PageLayout';
+import { FormInput, FormButton, FormActions } from '../components/common/FormComponents';
 import { supabase } from '../config/supabase';
 import { HeaderSettings, MenuItem, uploadLogoImage, deleteLogoImage, updateHeaderSettings, getHeaderSettings } from '../config/supabase';
-import { useBreadcrumb } from '../contexts/BreadcrumbContext';
 
 const HeaderSettingsPage: React.FC = () => {
   const { setBreadcrumbs } = useBreadcrumb();
@@ -9,7 +12,7 @@ const HeaderSettingsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoLightFile, setLogoLightFile] = useState<File | null>(null);
 
   useEffect(() => {
     setBreadcrumbs([
@@ -24,23 +27,25 @@ const HeaderSettingsPage: React.FC = () => {
       const data = await getHeaderSettings();
       if (data) {
         setSettings(data);
-        if (data.logo_image_url) {
-          setLogoPreview(data.logo_image_url);
-        }
       } else {
-                 // Varsayılan ayarları oluştur
-         const defaultSettings: Partial<HeaderSettings> = {
-           menu_items: [
-             { id: "1", href: "/projects", label: "WORK", order: 1 },
-             { id: "2", href: "/about", label: "ABOUT", order: 2 },
-             { id: "3", href: "/blog", label: "NEWS", order: 3 },
-             { id: "4", href: "/careers", label: "CAREERS", order: 4 },
-           ]
-         };
+        // Varsayılan ayarları oluştur
+        const defaultSettings: Partial<HeaderSettings> = {
+          menu_items: [
+            { id: "1", href: "/projects", label: "WORK", order: 1 },
+            { id: "2", href: "/about", label: "ABOUT", order: 2 },
+            { id: "3", href: "/blog", label: "NEWS", order: 3 },
+            { id: "4", href: "/careers", label: "CAREERS", order: 4 },
+          ]
+        };
         setSettings(defaultSettings as HeaderSettings);
       }
     } catch (error) {
       console.error('Error fetching settings:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Hata',
+        text: 'Header ayarları yüklenirken bir hata oluştu.'
+      });
     } finally {
       setLoading(false);
     }
@@ -51,55 +56,155 @@ const HeaderSettingsPage: React.FC = () => {
     if (file) {
       // Dosya boyutu kontrolü (5MB)
       if (file.size > 5 * 1024 * 1024) {
-        alert('Dosya boyutu 5MB\'dan küçük olmalıdır.');
+        Swal.fire({
+          icon: 'error',
+          title: 'Hata',
+          text: 'Dosya boyutu 5MB\'dan küçük olmalıdır.'
+        });
         return;
       }
 
       // Dosya formatı kontrolü
       const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/svg+xml', 'image/webp'];
       if (!allowedTypes.includes(file.type)) {
-        alert('Sadece JPEG, PNG, SVG ve WebP formatları desteklenir.');
+        Swal.fire({
+          icon: 'error',
+          title: 'Hata',
+          text: 'Sadece JPEG, PNG, SVG ve WebP formatları desteklenir.'
+        });
         return;
       }
 
       setLogoFile(file);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setLogoPreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleLogoLightChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Dosya boyutu kontrolü (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Hata',
+          text: 'Dosya boyutu 5MB\'dan küçük olmalıdır.'
+        });
+        return;
+      }
+
+      // Dosya formatı kontrolü
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/svg+xml', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Hata',
+          text: 'Sadece JPEG, PNG, SVG ve WebP formatları desteklenir.'
+        });
+        return;
+      }
+
+      setLogoLightFile(file);
     }
   };
 
   const handleRemoveLogo = async () => {
     if (!settings?.logo_image_url) return;
 
-    if (confirm('Logoyu silmek istediğinize emin misiniz?')) {
+    const result = await Swal.fire({
+      title: 'Emin misiniz?',
+      text: 'Koyu renkli logoyu silmek istediğinize emin misiniz?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Evet, sil!',
+      cancelButtonText: 'İptal'
+    });
+
+    if (result.isConfirmed) {
       try {
         // Storage'dan logoyu sil
         await deleteLogoImage(settings.logo_image_url);
         
         // State'i güncelle
         setSettings(prev => prev ? { ...prev, logo_image_url: undefined } : null);
-        setLogoPreview(null);
         
-        alert('Logo başarıyla silindi!');
+        Swal.fire({
+          icon: 'success',
+          title: 'Başarılı!',
+          text: 'Koyu renkli logo başarıyla silindi.',
+          timer: 2000,
+          showConfirmButton: false
+        });
       } catch (error) {
         console.error('Error removing logo:', error);
-        alert('Logo silinirken bir hata oluştu.');
+        Swal.fire({
+          icon: 'error',
+          title: 'Hata',
+          text: 'Logo silinirken bir hata oluştu.'
+        });
       }
     }
   };
 
-  const handleMenuChange = (index: number, field: keyof MenuItem, value: string | number) => {
+  const handleRemoveLogoLight = async () => {
+    if (!settings?.logo_image_url_light) return;
+
+    const result = await Swal.fire({
+      title: 'Emin misiniz?',
+      text: 'Açık renkli logoyu silmek istediğinize emin misiniz?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Evet, sil!',
+      cancelButtonText: 'İptal'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        // Storage'dan logoyu sil
+        await deleteLogoImage(settings.logo_image_url_light);
+        
+        // State'i güncelle
+        setSettings(prev => prev ? { ...prev, logo_image_url_light: undefined } : null);
+        
+        Swal.fire({
+          icon: 'success',
+          title: 'Başarılı!',
+          text: 'Açık renkli logo başarıyla silindi.',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } catch (error) {
+        console.error('Error removing logo light:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Hata',
+          text: 'Logo silinirken bir hata oluştu.'
+        });
+      }
+    }
+  };
+
+  const handleMenuChange = async (index: number, field: keyof MenuItem, value: string | number) => {
     if (!settings) return;
 
     const updatedMenu = [...settings.menu_items];
     updatedMenu[index] = { ...updatedMenu[index], [field]: value };
-    setSettings({ ...settings, menu_items: updatedMenu });
+    const updatedSettings = { ...settings, menu_items: updatedMenu };
+    setSettings(updatedSettings);
+
+    // Otomatik kaydet (debounce ile)
+    try {
+      await updateHeaderSettings(updatedSettings);
+    } catch (error) {
+      console.error('Error auto-saving menu change:', error);
+      // Hata mesajını gösterme, sadece log'la
+    }
   };
 
-  const addMenuItem = () => {
+  const addMenuItem = async () => {
     if (!settings) return;
 
     const newItem: MenuItem = {
@@ -109,13 +214,27 @@ const HeaderSettingsPage: React.FC = () => {
       order: settings.menu_items.length + 1
     };
 
-    setSettings({
+    const updatedSettings = {
       ...settings,
       menu_items: [...settings.menu_items, newItem]
-    });
+    };
+
+    setSettings(updatedSettings);
+
+    // Otomatik kaydet
+    try {
+      await updateHeaderSettings(updatedSettings);
+    } catch (error) {
+      console.error('Error auto-saving menu item:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Hata',
+        text: 'Menü öğesi eklenirken bir hata oluştu.'
+      });
+    }
   };
 
-  const removeMenuItem = (index: number) => {
+  const removeMenuItem = async (index: number) => {
     if (!settings) return;
 
     const updatedMenu = settings.menu_items.filter((_: MenuItem, i: number) => i !== index);
@@ -124,10 +243,23 @@ const HeaderSettingsPage: React.FC = () => {
       item.order = i + 1;
     });
 
-    setSettings({ ...settings, menu_items: updatedMenu });
+    const updatedSettings = { ...settings, menu_items: updatedMenu };
+    setSettings(updatedSettings);
+
+    // Otomatik kaydet
+    try {
+      await updateHeaderSettings(updatedSettings);
+    } catch (error) {
+      console.error('Error auto-saving menu removal:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Hata',
+        text: 'Menü öğesi silinirken bir hata oluştu.'
+      });
+    }
   };
 
-  const moveMenuItem = (index: number, direction: 'up' | 'down') => {
+  const moveMenuItem = async (index: number, direction: 'up' | 'down') => {
     if (!settings) return;
 
     const updatedMenu = [...settings.menu_items];
@@ -135,23 +267,38 @@ const HeaderSettingsPage: React.FC = () => {
 
     if (newIndex >= 0 && newIndex < updatedMenu.length) {
       [updatedMenu[index], updatedMenu[newIndex]] = [updatedMenu[newIndex], updatedMenu[index]];
-          // Sıra numaralarını güncelle
-    updatedMenu.forEach((item: MenuItem, i: number) => {
-      item.order = i + 1;
-    });
+      // Sıra numaralarını güncelle
+      updatedMenu.forEach((item: MenuItem, i: number) => {
+        item.order = i + 1;
+      });
 
-      setSettings({ ...settings, menu_items: updatedMenu });
+      const updatedSettings = { ...settings, menu_items: updatedMenu };
+      setSettings(updatedSettings);
+
+      // Otomatik kaydet
+      try {
+        await updateHeaderSettings(updatedSettings);
+      } catch (error) {
+        console.error('Error auto-saving menu reorder:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Hata',
+          text: 'Menü sırası değiştirilirken bir hata oluştu.'
+        });
+      }
     }
   };
 
-  const handleSave = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!settings) return;
 
     setSaving(true);
     try {
       let logoUrl = settings.logo_image_url;
+      let logoLightUrl = settings.logo_image_url_light;
 
-      // Yeni logo yüklendiyse
+      // Yeni koyu logo yüklendiyse
       if (logoFile) {
         // Eski logo varsa sil
         if (settings.logo_image_url) {
@@ -165,10 +312,25 @@ const HeaderSettingsPage: React.FC = () => {
         }
       }
 
+      // Yeni açık logo yüklendiyse
+      if (logoLightFile) {
+        // Eski logo varsa sil
+        if (settings.logo_image_url_light) {
+          await deleteLogoImage(settings.logo_image_url_light);
+        }
+
+        // Yeni logoyu yükle
+        const uploadedUrl = await uploadLogoImage(logoLightFile);
+        if (uploadedUrl) {
+          logoLightUrl = uploadedUrl;
+        }
+      }
+
       // Ayarları güncelle
       const updatedSettings = {
         ...settings,
         logo_image_url: logoUrl,
+        logo_image_url_light: logoLightUrl,
         updated_at: new Date().toISOString()
       };
 
@@ -176,11 +338,22 @@ const HeaderSettingsPage: React.FC = () => {
       if (result) {
         setSettings(result);
         setLogoFile(null);
-        alert('Header ayarları başarıyla güncellendi!');
+        setLogoLightFile(null);
+        Swal.fire({
+          icon: 'success',
+          title: 'Başarılı!',
+          text: 'Header ayarları başarıyla kaydedildi.',
+          timer: 2000,
+          showConfirmButton: false
+        });
       }
     } catch (error) {
       console.error('Error saving settings:', error);
-      alert('Ayarlar kaydedilirken bir hata oluştu.');
+      Swal.fire({
+        icon: 'error',
+        title: 'Hata',
+        text: 'Header ayarları kaydedilirken bir hata oluştu.'
+      });
     } finally {
       setSaving(false);
     }
@@ -188,165 +361,167 @@ const HeaderSettingsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-            <div className="space-y-4">
-              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/3"></div>
-              <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-            </div>
-          </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Yükleniyor...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-6">Header Ayarları</h1>
+    <FormLayout title="Header Ayarları" showBackButton={false}>
+      <form onSubmit={handleSubmit} className="space-y-8">
+        {/* Logo Section */}
+        <div className="space-y-6">
+          <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Logo Ayarları</h3>
+          
+          {/* Koyu Renkli Logo */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Koyu Renkli Logo (Beyaz arka plan için)
+            </label>
+            <input
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/svg+xml,image/webp"
+              onChange={handleLogoChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Desteklenen formatlar: JPEG, PNG, SVG, WebP (Maksimum 5MB)
+            </p>
 
-                     {/* Logo Ayarları */}
-           <div className="mb-8">
-             <h2 className="text-lg font-semibold text-gray-800 mb-4">Logo Ayarları</h2>
-             
-             <div className="max-w-md">
-               {/* Logo Resmi */}
-               <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                   Logo Resmi
-                 </label>
-                 <input
-                   type="file"
-                   accept="image/jpeg,image/jpg,image/png,image/svg+xml,image/webp"
-                   onChange={handleLogoChange}
-                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                 />
-                 <p className="text-xs text-gray-500 mt-1">
-                   Desteklenen formatlar: JPEG, PNG, SVG, WebP (Maksimum 5MB)
-                 </p>
-                 {logoPreview && (
-                   <div className="mt-4">
-                     <p className="text-sm text-gray-600 mb-2">Önizleme:</p>
-                     <img
-                       src={logoPreview}
-                       alt="Logo preview"
-                       className="h-16 w-auto object-contain border border-gray-200 rounded"
-                     />
-                   </div>
-                 )}
-                 {settings?.logo_image_url && !logoFile && (
-                   <div className="mt-4">
-                     <p className="text-sm text-gray-600 mb-2">Mevcut Logo:</p>
-                     <div className="flex items-center gap-4">
-                       <img
-                         src={settings.logo_image_url}
-                         alt="Current logo"
-                         className="h-16 w-auto object-contain border border-gray-200 rounded"
-                       />
-                       <button
-                         onClick={handleRemoveLogo}
-                         className="px-3 py-1 text-sm bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
-                       >
-                         Logoyu Sil
-                       </button>
-                     </div>
-                   </div>
-                 )}
-               </div>
-             </div>
-           </div>
-
-          {/* Menü Ayarları */}
-          <div className="mb-8">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-gray-800">Menü Öğeleri</h2>
-              <button
-                onClick={addMenuItem}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                Menü Öğesi Ekle
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {settings?.menu_items.map((item: MenuItem, index: number) => (
-                <div key={item.id} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-medium text-gray-700">
-                      Öğe {index + 1}
-                    </span>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => moveMenuItem(index, 'up')}
-                        disabled={index === 0}
-                        className="px-2 py-1 text-sm bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        onClick={() => moveMenuItem(index, 'down')}
-                        disabled={index === settings.menu_items.length - 1}
-                        className="px-2 py-1 text-sm bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50"
-                      >
-                        ↓
-                      </button>
-                      <button
-                        onClick={() => removeMenuItem(index)}
-                        className="px-2 py-1 text-sm bg-red-100 text-red-600 rounded hover:bg-red-200"
-                      >
-                        Sil
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Etiket
-                      </label>
-                      <input
-                        type="text"
-                        value={item.label}
-                        onChange={(e) => handleMenuChange(index, 'label', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Menü etiketi"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Link
-                      </label>
-                      <input
-                        type="text"
-                        value={item.href}
-                        onChange={(e) => handleMenuChange(index, 'href', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="/sayfa-adi"
-                      />
-                    </div>
-                  </div>
+            {settings?.logo_image_url && !logoFile && (
+              <div className="mt-4">
+                <p className="text-sm text-gray-600 mb-2">Mevcut Koyu Logo:</p>
+                <div className="flex items-center gap-4">
+                  <img
+                    src={settings.logo_image_url}
+                    alt="Current logo"
+                    className="h-16 w-auto object-contain border border-gray-200 rounded"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRemoveLogo}
+                    className="px-3 py-1 text-sm bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                  >
+                    Logoyu Sil
+                  </button>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* Kaydet Butonu */}
-          <div className="flex justify-end">
+          {/* Açık Renkli Logo */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Açık Renkli Logo (Şeffaf arka plan için)
+            </label>
+            <input
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/svg+xml,image/webp"
+              onChange={handleLogoLightChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Desteklenen formatlar: JPEG, PNG, SVG, WebP (Maksimum 5MB)
+            </p>
+
+            {settings?.logo_image_url_light && !logoLightFile && (
+              <div className="mt-4">
+                <p className="text-sm text-gray-600 mb-2">Mevcut Açık Logo:</p>
+                <div className="flex items-center gap-4">
+                  <img
+                    src={settings.logo_image_url_light}
+                    alt="Current logo light"
+                    className="h-16 w-auto object-contain border border-gray-200 rounded"
+                    style={{ backgroundColor: '#3b3b3b' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRemoveLogoLight}
+                    className="px-3 py-1 text-sm bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                  >
+                    Logoyu Sil
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Menu Section */}
+        <div className="space-y-6">
+          <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Menü Ayarları</h3>
+          
+          <div className="space-y-4">
+            {settings?.menu_items.map((item: MenuItem, index: number) => (
+              <div key={item.id} className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg">
+                <div className="flex-1 grid grid-cols-2 gap-4">
+                  <FormInput
+                    label="Menü Adı"
+                    value={item.label}
+                    onChange={(value) => handleMenuChange(index, 'label', value)}
+                    placeholder="Örn: WORK"
+                    required
+                  />
+                  <FormInput
+                    label="Link"
+                    value={item.href}
+                    onChange={(value) => handleMenuChange(index, 'href', value)}
+                    placeholder="Örn: /projects"
+                    required
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => moveMenuItem(index, 'up')}
+                    disabled={index === 0}
+                    className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveMenuItem(index, 'down')}
+                    disabled={index === settings.menu_items.length - 1}
+                    className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeMenuItem(index)}
+                    className="p-2 text-red-500 hover:text-red-700"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            ))}
             <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
+              type="button"
+              onClick={addMenuItem}
+              className="w-full py-2 px-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-600 transition-colors"
             >
-              {saving ? 'Kaydediliyor...' : 'Kaydet'}
+              + Yeni Menü Öğesi Ekle
             </button>
           </div>
         </div>
-      </div>
-    </div>
+
+        <FormActions>
+          <FormButton
+            type="submit"
+            loading={saving}
+            loadingText="Kaydediliyor..."
+          >
+            Kaydet
+          </FormButton>
+        </FormActions>
+      </form>
+    </FormLayout>
   );
 };
 

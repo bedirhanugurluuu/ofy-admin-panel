@@ -30,6 +30,7 @@ const ProjectForm: React.FC<{ mode: "new" | "edit" }> = ({ mode }) => {
   const [role, setRole] = useState("");
   const [isFeatured, setIsFeatured] = useState(false);
   const [featuredOrder, setFeaturedOrder] = useState<string>("");
+  const [order, setOrder] = useState<string>("");
   const [thumbnailMedia, setThumbnailMedia] = useState<File | null>(null);
   const [bannerMedia, setBannerMedia] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
@@ -78,6 +79,45 @@ const ProjectForm: React.FC<{ mode: "new" | "edit" }> = ({ mode }) => {
     setFeaturedOrder(e.target.value);
   };
 
+  const handleFeaturedChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const newFeaturedValue = e.target.checked;
+    
+    if (newFeaturedValue) {
+      try {
+        const { data: existingProjects, error: getError } = await api.projects.getAll();
+        if (getError) throw getError;
+        
+        if (existingProjects) {
+          const featuredCount = existingProjects.filter(p => p.is_featured).length;
+          
+          // Eğer bu proje zaten featured ise sayıyı azalt
+          const currentProject = existingProjects.find(p => p.slug === slug);
+          const adjustedCount = currentProject && currentProject.is_featured ? featuredCount - 1 : featuredCount;
+          
+          if (adjustedCount >= 4) {
+            const result = await Swal.fire({
+              icon: "warning",
+              title: "Uyarı!",
+              text: `Şu anda ${adjustedCount} featured proje var. Anasayfada sadece 4 featured proje gösterilir. Bu projeyi featured yapmak istediğinize emin misiniz?`,
+              showCancelButton: true,
+              confirmButtonText: "Evet, Featured Yap",
+              cancelButtonText: "İptal"
+            });
+            
+            if (!result.isConfirmed) {
+              return; // Checkbox'ı işaretleme
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Featured proje sayısı kontrol edilemedi:", err);
+        return; // Hata durumunda checkbox'ı işaretleme
+      }
+    }
+    
+    setIsFeatured(newFeaturedValue);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -88,6 +128,39 @@ const ProjectForm: React.FC<{ mode: "new" | "edit" }> = ({ mode }) => {
         text: "Başlık ve slug zorunludur.",
       });
       return;
+    }
+
+    // Featured proje sayısını kontrol et
+    if (isFeatured) {
+      try {
+        const { data: existingProjects, error: getError } = await api.projects.getAll();
+        if (getError) throw getError;
+        
+        if (existingProjects) {
+          const featuredCount = existingProjects.filter(p => p.is_featured).length;
+          
+          // Eğer bu proje zaten featured ise sayıyı azalt
+          const currentProject = existingProjects.find(p => p.slug === slug);
+          const adjustedCount = currentProject && currentProject.is_featured ? featuredCount - 1 : featuredCount;
+          
+          if (adjustedCount >= 4) {
+            const result = await Swal.fire({
+              icon: "warning",
+              title: "Uyarı!",
+              text: `Şu anda ${adjustedCount} featured proje var. Anasayfada sadece 4 featured proje gösterilir. Bu projeyi featured yapmak istediğinize emin misiniz?`,
+              showCancelButton: true,
+              confirmButtonText: "Evet, Featured Yap",
+              cancelButtonText: "İptal"
+            });
+            
+            if (!result.isConfirmed) {
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Featured proje sayısı kontrol edilemedi:", err);
+      }
     }
 
     try {
@@ -122,10 +195,9 @@ const ProjectForm: React.FC<{ mode: "new" | "edit" }> = ({ mode }) => {
         role,
         is_featured: isFeatured,
         featured_order: parseInt(featuredOrder) || 0,
+        order: order ? parseInt(order) : undefined,
         thumbnail_media: thumbnailPath || null,
-        banner_media: bannerPath || null,
-        video_url: videoUrl || null,
-        gallery_images: []
+        banner_media: bannerPath || null
       };
 
       if (mode === "new") {
@@ -135,6 +207,8 @@ const ProjectForm: React.FC<{ mode: "new" | "edit" }> = ({ mode }) => {
         // Edit mode için slug'ı kullanarak projeyi bul ve güncelle
         const { data: existingProjects, error: getError } = await api.projects.getAll();
         if (getError) throw getError;
+        
+        if (!existingProjects) throw new Error("Projeler yüklenemedi");
         
         const existingProject = existingProjects.find(p => p.slug === slug);
         if (!existingProject) throw new Error("Proje bulunamadı");
@@ -288,7 +362,7 @@ const ProjectForm: React.FC<{ mode: "new" | "edit" }> = ({ mode }) => {
         <input
           type="checkbox"
           checked={isFeatured}
-          onChange={(e) => setIsFeatured(e.target.checked)}
+          onChange={handleFeaturedChange}
           id="featured-checkbox"
         />
         <label htmlFor="featured-checkbox" style={{ margin: 0 }}>Featured mı?</label>
@@ -304,6 +378,22 @@ const ProjectForm: React.FC<{ mode: "new" | "edit" }> = ({ mode }) => {
           min={0}
           step={1}
         />
+      </div>
+
+      <div>
+        <label style={labelStyle}>Genel Sıralama (Order)</label>
+        <input
+          type="number"
+          value={order}
+          onChange={(e) => setOrder(e.target.value)}
+          style={inputStyle}
+          min={0}
+          step={1}
+          placeholder="Sıralama numarası (opsiyonel)"
+        />
+        <small style={{ fontSize: "12px", color: "#666", display: "block", marginTop: "0.25rem" }}>
+          Düşük sayılar önce gösterilir. Boş bırakılırsa en sona eklenir.
+        </small>
       </div>
 
       <button type="submit" style={buttonStyle}>

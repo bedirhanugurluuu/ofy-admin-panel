@@ -1,12 +1,13 @@
 // src/layouts/MainLayout.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useBreadcrumb } from "../contexts/BreadcrumbContext";
-import { LogOut, Home, Image, Folder, User, FileText, Award, Sliders, ChevronDown, Settings } from "lucide-react";
+import { LogOut, Home, Image, Folder, User, FileText, Sliders, ChevronDown, Settings, Briefcase, ImageIcon, Layout, Shield } from "lucide-react";
 import Swal from "sweetalert2";
 import Breadcrumb from "../components/common/Breadcrumb";
 import LoadingSpinner from "../components/common/LoadingSpinner";
+import { auth } from "../config/supabase";
 
 export default function MainLayout() {
   const { logout } = useAuth();
@@ -14,11 +15,11 @@ export default function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [aboutDropdownOpen, setAboutDropdownOpen] = useState(false);
 
+
   // Hakkımızda sayfalarından birindeyse dropdown'ı açık tut
   const isAboutPage = breadcrumbs.some(breadcrumb =>
     breadcrumb.name === 'Hakkımızda' ||
     breadcrumb.name === 'About Gallery' ||
-    breadcrumb.name === 'Awards' ||
     breadcrumb.name === 'Slider' ||
     breadcrumb.name === 'What We Do'
   );
@@ -30,19 +31,24 @@ export default function MainLayout() {
     }
   }, [isAboutPage, aboutDropdownOpen]);
 
+
+
   const menuItems = [
     { name: "Ana Sayfa", path: "/admin/dashboard", icon: <Home size={18} /> },
     { name: "Giriş Bannerları", path: "/admin/intro-banners", icon: <Image size={18} /> },
+    { name: "About Banner", path: "/admin/about-banner", icon: <ImageIcon size={18} /> },
+    { name: "Footer", path: "/admin/footer", icon: <Layout size={18} /> },
     { name: "Projeler", path: "/admin/projects", icon: <Folder size={18} /> },
+    { name: "Services", path: "/admin/services", icon: <Briefcase size={18} /> },
     { name: "Haberler", path: "/admin/news", icon: <FileText size={18} /> },
     { name: "Contact", path: "/admin/contact", icon: <FileText size={18} /> },
     { name: "Header Ayarları", path: "/admin/header", icon: <Settings size={18} /> },
+    { name: "IP Yönetimi", path: "/admin/ip-management", icon: <Shield size={18} /> },
   ];
 
   const aboutSubmenuItems = [
     { name: "Genel Bilgiler", path: "/admin/about", icon: <User size={16} /> },
     { name: "About Gallery", path: "/admin/about-gallery", icon: <Image size={16} /> },
-    { name: "Awards", path: "/admin/awards", icon: <Award size={16} /> },
     { name: "Slider", path: "/admin/slider", icon: <Sliders size={16} /> },
     { name: "What We Do", path: "/admin/what-we-do", icon: <FileText size={16} /> },
   ];
@@ -69,7 +75,7 @@ export default function MainLayout() {
       <aside
         className={`fixed top-0 left-0 h-[100vh] w-64 bg-base-100 shadow-lg z-40 transform transition-transform duration-300
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
-          md:translate-x-0 md:static md:shadow-none
+          md:translate-x-0 md:sticky md:shadow-none
           flex flex-col
         `}
       >
